@@ -45,14 +45,15 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
     CREATE TABLE IF NOT EXISTS conversation_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         conversation_id UUID NOT NULL,
-        -- TODO: Add user_id column for strict history isolation
+        user_id VARCHAR(255), -- Added user_id for isolation (adjust type/length if needed)
         sender_role VARCHAR(10) NOT NULL CHECK (sender_role IN ('user', 'ai')),
         message_content TEXT NOT NULL,
         timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         metadata JSONB
     );
-    CREATE INDEX IF NOT EXISTS idx_conversation_history_conv_id_ts
-    ON conversation_history (conversation_id, timestamp);
+    -- Updated index to include user_id for better query performance
+    CREATE INDEX IF NOT EXISTS idx_conversation_history_user_conv_id_ts
+    ON conversation_history (user_id, conversation_id, timestamp);
     ```
     *(注意: 添加了 `conversation_history` 表的创建)*
 
