@@ -3,10 +3,10 @@
 DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过集成个人知识库和对话记忆，提高信息处理和交互效率。
 
 当前版本实现了以下核心功能：
-*   **文件上传与处理:** 接收上传的文件，自动进行文本分块和向量化。
-*   **个人知识库 (RAG):** 将处理后的文档存入向量数据库 (PostgreSQL + pgvector)，支持基于文件内容的智能问答。
-*   **对话历史记忆:** 记录多轮对话上下文，实现更连贯的 AI 交互。
-*   **基础 API:** 提供文件上传和聊天交互的 API 端点。
+*   **文件上传与处理:** 接收上传的文件，自动进行文本分块和向量化，并将 `user_id` 存入元数据。
+*   **个人知识库 (RAG):** 将处理后的文档存入向量数据库 (PostgreSQL + pgvector)，支持基于文件内容的智能问答。**(注意：当前的向量搜索用户隔离过滤存在已知问题，详见 `debug.md`)**
+*   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id`），实现更连贯的 AI 交互。
+*   **基础 API:** 提供文件上传和聊天交互的 API 端点，支持临时的 `user_id` 进行数据关联。
 
 ## 设置与运行
 
@@ -31,7 +31,7 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
     ```
     **注意:** 如果容器已存在，您可能需要先使用 `docker stop dreamhub-db && docker rm dreamhub-db` 来停止并删除旧容器。
 
-3.  **启用 pgvector 扩展:**
+3.  **启用 pgvector 扩展并创建表:**
     使用数据库客户端 (如 Navicat, DBeaver, psql) 连接到数据库:
     *   主机: `localhost`
     *   端口: `5432`
@@ -41,9 +41,11 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
     执行以下 SQL:
     ```sql
     CREATE EXTENSION IF NOT EXISTS vector;
+
     CREATE TABLE IF NOT EXISTS conversation_history (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         conversation_id UUID NOT NULL,
+        -- TODO: Add user_id column for strict history isolation
         sender_role VARCHAR(10) NOT NULL CHECK (sender_role IN ('user', 'ai')),
         message_content TEXT NOT NULL,
         timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -52,7 +54,7 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
     CREATE INDEX IF NOT EXISTS idx_conversation_history_conv_id_ts
     ON conversation_history (conversation_id, timestamp);
     ```
-    *(注意: `conversation_history` 表的创建也包含在此处，确保数据库结构完整)*
+    *(注意: 添加了 `conversation_history` 表的创建)*
 
 4.  **创建 `.env` 文件:**
     在项目根目录创建 `.env` 文件，并填入以下内容，替换占位符：
@@ -80,11 +82,11 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 
 ### 1. 上传文件 (构建知识库)
 
-将 `your_document.txt` 替换为实际文件名。
+需要提供 `user_id` (表单字段) 和 `file`。将 `your_document.txt` 替换为实际文件名，`user_A` 替换为用户标识。
 
 ```bash
 # PowerShell / bash / zsh
-curl -X POST -F "file=@your_document.txt" http://localhost:8080/api/v1/upload
+curl -X POST -F "file=@your_document.txt" -F "user_id=user_A" http://localhost:8080/api/v1/upload
 
 # Windows cmd
 # (curl 在 cmd 中上传文件可能需要不同语法，建议使用 PowerShell 或其他工具)
@@ -100,12 +102,14 @@ curl -X POST -F "file=@your_document.txt" http://localhost:8080/api/v1/upload
 
 ### 2. 开始新对话
 
+需要提供 `user_id`。
+
 ```bash
 # Windows cmd (注意 JSON 转义)
-curl -X POST -H "Content-Type: application/json" -d "{\"message\":\"你好！\"}" http://localhost:8080/api/v1/chat
+curl -X POST -H "Content-Type: application/json" -d "{\"user_id\":\"user_A\",\"message\":\"你好！\"}" http://localhost:8080/api/v1/chat
 
 # PowerShell / bash / zsh
-# curl -X POST -H "Content-Type: application/json" -d '{"message":"你好！"}' http://localhost:8080/api/v1/chat
+# curl -X POST -H "Content-Type: application/json" -d '{"user_id":"user_A","message":"你好！"}' http://localhost:8080/api/v1/chat
 ```
 成功响应示例 (记下 `conversation_id`):
 ```json
@@ -115,18 +119,18 @@ curl -X POST -H "Content-Type: application/json" -d "{\"message\":\"你好！\"}
 }
 ```
 
-### 3. 继续对话 (使用 `conversation_id`)
+### 3. 继续对话 (使用 `conversation_id` 和 `user_id`)
 
-将 `YOUR_CONVERSATION_ID` 替换为上一步获取的 ID。
+将 `YOUR_CONVERSATION_ID` 替换为上一步获取的 ID，`user_A` 替换为对应的用户 ID。
 
 ```bash
 # Windows cmd
-curl -X POST -H "Content-Type: application/json" -d "{\"conversation_id\":\"YOUR_CONVERSATION_ID\",\"message\":\"请根据我上传的文件总结一下主要内容。\"}" http://localhost:8080/api/v1/chat
+curl -X POST -H "Content-Type: application/json" -d "{\"conversation_id\":\"YOUR_CONVERSATION_ID\",\"user_id\":\"user_A\",\"message\":\"请根据我上传的文件总结一下主要内容。\"}" http://localhost:8080/api/v1/chat
 
 # PowerShell / bash / zsh
-# curl -X POST -H "Content-Type: application/json" -d '{"conversation_id":"YOUR_CONVERSATION_ID","message":"请根据我上传的文件总结一下主要内容。"}' http://localhost:8080/api/v1/chat
+# curl -X POST -H "Content-Type: application/json" -d '{"conversation_id":"YOUR_CONVERSATION_ID","user_id":"user_A","message":"请根据我上传的文件总结一下主要内容。"}' http://localhost:8080/api/v1/chat
 ```
-成功响应示例 (回复会基于文件内容和历史):
+成功响应示例 (回复会基于该用户的 RAG 上下文和该对话的历史):
 ```json
 {
   "conversation_id": "YOUR_CONVERSATION_ID",
@@ -134,8 +138,14 @@ curl -X POST -H "Content-Type: application/json" -d "{\"conversation_id\":\"YOUR
 }
 ```
 
+## 已知问题
+
+*   **对话历史隔离:** 代码层面已为 `conversation_history` 表添加 `user_id` 支持以实现用户隔离。**注意：需要手动在数据库中为该表添加 `user_id` 字段才能生效。**
+
 ## 后续开发计划 (参考 PLAN.md)
 
+*   **修复向量搜索过滤问题。**
+*   **为对话历史添加用户隔离。**
 *   实现更复杂的文档解析 (PDF, DOCX)。
 *   优化 RAG 检索策略和 Prompt 工程。
 *   实现结构化知识提取与存储。

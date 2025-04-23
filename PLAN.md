@@ -50,6 +50,12 @@ DreamHub
     *   **实现:** (未来阶段) 让 LLM 执行信息提取任务 (Named Entity Recognition, Relation Extraction)，将识别出的关键实体、关系、事实存入 PostgreSQL 的标准 SQL 表中（例如项目表、联系人表、笔记表等）。
     *   **作用:** 支持更精确的查询、推理、知识关联和自动化任务。
     *   **状态:** **未来阶段规划。**
+*   **区分硬性偏好与软性记忆点 (Handling Constraints vs. Preferences):**
+    *   **挑战:** 需要区分必须严格遵守的规则/约束（硬性偏好，如“我不吃海鲜”、“项目截止日期是周五”）和一般性的知识点/用户风格/事实（软性记忆点，可通过向量或结构化知识检索）。将硬性规则放入向量库进行检索是不可靠的。
+    *   **策略:**
+        *   **硬性偏好/规则:** 应识别并存储在更可靠、易于精确检索的位置（例如：专门的用户配置表、规则库）。在构建 Prompt 时，这些规则需要被**优先、显式地**插入，确保模型严格遵守。
+        *   **软性记忆点:** 可以作为结构化知识（如摘要、关键词、实体关系）存储在向量元数据或独立的结构化表中，并在 RAG 检索或 Prompt 构建时作为上下文信息提供给模型。
+    *   **状态:** **未来阶段规划。**
 *   **记忆路由/决策 (Memory Routing / Automatic Judgment):**
     *   **实现:** (未来/高级阶段) 设计机制（规则、启发式或 LLM 驱动的 Agent）来决定：
         *   **存储时:** 新信息应该存入哪个或哪些记忆系统。
@@ -93,8 +99,9 @@ DreamHub
 ## 6. 技术栈选型
 
 *   **后端:** Go (Gin)
-*   **前端:** (待定) React (Next.js) / Vue (Nuxt.js)
-*   **UI 库:** (待定) Material UI (MUI), Ant Design, Chakra UI 等
+*   **前端:** React (使用 Vite, TypeScript 推荐)
+*   **UI 库:** Tailwind CSS
+*   **状态管理:** Zustand
 *   **数据库:** PostgreSQL + `pgvector` 扩展
 *   **文档解析:** (初期) Go 标准库 (TXT), (后续) Go 开源库 (PDF, DOCX 等)
 *   **AI 核心:** LangChainGo, OpenAI API (LLM: gpt-4o, Embedding: text-embedding-3-large)
@@ -113,7 +120,7 @@ DreamHub
 
 ```mermaid
 graph TD
-    User --> FrontendUI(Web UI - Dashboard, Docs, Chat Input)
+    User --> FrontendUI(Web UI - React, Tailwind, Zustand)
     FrontendUI <-- REST API --> BackendAPI(Go + Gin + LangChainGo)
 
     BackendAPI --> Database[(PostgreSQL + pgvector + History Table)]
@@ -130,3 +137,96 @@ graph TD
     subgraph User Interface (Phase 1)
         FrontendUI
     end
+
+## 前端开发计划 (React)
+
+**目标:** 构建一个基于 React 的前端界面，用于与 DreamHub 后端服务交互，实现文件上传、AI 聊天和对话历史展示功能，采用简洁科技风格，并为未来扩展到 React Native 奠定基础。
+
+**1. 项目初始化与设置**
+
+*   在项目根目录下创建 `frontend` 文件夹。
+*   使用 Vite 初始化 React 项目 (推荐使用 TypeScript):
+    ```bash
+    # 使用 TypeScript (推荐)
+    npm create vite@latest frontend -- --template react-ts
+    # 或者使用 JavaScript
+    # npm create vite@latest frontend -- --template react
+    cd frontend
+    npm install
+    ```
+*   安装 `axios`, `zustand`, 和 `tailwindcss`:
+    ```bash
+    npm install axios zustand
+    npm install -D tailwindcss postcss autoprefixer
+    npx tailwindcss init -p
+    ```
+*   配置 Tailwind CSS (参照官方 Vite 指南)。
+
+**2. 核心组件设计 (React)**
+
+```mermaid
+graph TD
+    A[App.tsx (主应用)] --> B(FileUpload.tsx 文件上传);
+    A --> C(ChatInterface.tsx 聊天界面);
+    C --> D(MessageDisplay.tsx 消息展示);
+    C --> E(UserInput.tsx 用户输入);
+    A --> F(HistoryPanel.tsx 对话历史面板);
+```
+
+*   **`App.tsx`**: 应用根组件，负责布局和路由。
+*   **`FileUpload.tsx`**: 处理文件上传逻辑和 UI。
+*   **`ChatInterface.tsx`**: 核心聊天交互区。
+    *   **`MessageDisplay.tsx`**: 展示消息流。
+    *   **`UserInput.tsx`**: 用户输入框和发送按钮。
+*   **`HistoryPanel.tsx`**: (可选) 展示和管理对话历史。
+
+**3. API 通信层 (`src/services/api.ts`)**
+
+*   封装 `uploadFile(file)` 和 `sendMessage(message, conversationId)` 函数。
+
+**4. 状态管理 (Zustand)**
+
+*   创建 store (`src/store/chatStore.ts`) 管理全局状态。
+
+**5. UI 实现与风格 (Tailwind CSS)**
+
+*   使用 React 组件和 JSX 构建界面。
+*   利用 Tailwind CSS 原子类实现“简洁科技风”。
+
+**6. 功能实现流程**
+
+*   **文件上传**: 组件处理 -> 调用 API -> 更新 Store/状态 -> UI 反映。
+*   **聊天**: 用户输入 -> 调用 API -> 更新 Store -> UI 反映。
+*   **对话历史**: 组件从 Store 读取并渲染。
+
+**7. 开发服务器与代理**
+
+*   使用 `npm run dev` 启动开发服务器。
+*   配置 `frontend/vite.config.ts` 代理 `/api/v1/*` 到后端。
+
+**开发计划概览 (Mermaid Gantt):**
+
+```mermaid
+gantt
+    dateFormat  YYYY-MM-DD
+    title DreamHub 前端开发计划 (React)
+
+    section 设置与基础
+    项目初始化与配置 (React+Vite) :a1, 2025-04-25, 1d
+    安装依赖 (Zustand, Tailwind)  :a2, after a1, 1d
+    API 服务封装                 :a3, after a1, 1d
+    Vite 代理与 Tailwind 配置     :a4, after a1, 1d
+
+    section 核心功能开发
+    文件上传组件 (UI)             :b1, after a2, 1d
+    文件上传逻辑 (API)            :b2, after b1 a3, 1d
+    聊天界面布局 (UI)             :b3, after a2, 1d
+    消息展示组件 (UI)             :b4, after b3, 1d
+    用户输入组件 (UI)             :b5, after b3, 1d
+    聊天逻辑 (API & State)        :b6, after b4 b5 a3, 2d
+    对话历史展示 (UI)             :b7, after b6, 1d
+
+    section 样式与完善
+    整体样式调整 (Tailwind)       :c1, after b7, 2d
+    交互细节优化                 :c2, after c1, 1d
+    测试与 Bug 修复              :c3, after c2, 2d
