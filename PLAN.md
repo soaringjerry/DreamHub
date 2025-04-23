@@ -6,7 +6,7 @@ DreamHub
 
 ## 2. 项目目标
 
-构建一个全能的 AI 驱动工作站/工作面板，旨在通过集成文档管理、自动化工作流和 AI Agent 能力，提高个人和团队的工作效率。
+构建一个全能的 AI 驱动工作站/工作面板，旨在通过集成文档管理、自动化工作流和 AI Agent 能力，提高个人和团队的工作效率，并具备接近人类的、能够自动判断存储方式的混合记忆系统。
 
 ## 3. 核心功能领域
 
@@ -14,69 +14,117 @@ DreamHub
 *   **自动化工作流引擎 (Automation Workflow Engine):** 规则驱动自动化、集成外部服务（邮件、日历等）、定时任务。
 *   **AI Agent 协作平台 (AI Agent Collaboration Platform):** 复杂任务委派、工具调用、人机协作、Agent 定制。
 *   **统一工作面板 (Unified Workspace Dashboard):** 个性化视图、集中信息展示、通知中心。
+*   **高级混合记忆系统:** 结合对话历史、向量知识库、结构化知识存储，并探索智能路由。
 
-## 4. 第一阶段重点 (MVP)
+## 4. AI 记忆系统策略 (逐步实现)
+
+目标是构建一个接近人类记忆方式的混合记忆系统，能够智能地存储和检索信息，并逐步实现自动判断存储类型的能力。
+
+*   **短期记忆 (Working Memory):**
+    *   **实现:** 通过管理传递给 LLM 的 Prompt 上下文窗口实现。
+    *   **工具:** LangChainGo 框架的上下文管理。
+*   **长期记忆 - 对话历史 (Episodic Memory):**
+    *   **实现:** 将用户和 AI 的每轮交互存储在 PostgreSQL 的 `conversation_history` 表中。
+    *   **作用:** 支持连贯的多轮对话。
+    *   **状态:** **第一阶段实现基础版本。**
+    *   **数据库表结构 (PostgreSQL):**
+        ```sql
+        CREATE TABLE IF NOT EXISTS conversation_history (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(), -- 使用 UUID 作为主键
+            conversation_id UUID NOT NULL,                 -- 标识对话会话
+            sender_role VARCHAR(10) NOT NULL CHECK (sender_role IN ('user', 'ai')), -- 限制角色
+            message_content TEXT NOT NULL,                 -- 消息内容
+            timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),  -- 带时区的时间戳
+            metadata JSONB                                 -- 可选的元数据
+        );
+
+        -- (可选) 为 conversation_id 和 timestamp 创建索引以加速查询
+        CREATE INDEX IF NOT EXISTS idx_conversation_history_conv_id_ts
+        ON conversation_history (conversation_id, timestamp);
+        ```
+*   **长期记忆 - 知识库 (Semantic Memory - Unstructured / Vector):**
+    *   **实现:** 通过 RAG 实现。处理文档，分块，向量化后存入 pgvector。
+    *   **作用:** 让 AI 能基于非结构化的文档内容进行语义理解和问答。
+    *   **状态:** **第一阶段实现基础版本。**
+*   **长期记忆 - 结构化知识 (Semantic Memory - Structured):**
+    *   **实现:** (未来阶段) 让 LLM 执行信息提取任务 (Named Entity Recognition, Relation Extraction)，将识别出的关键实体、关系、事实存入 PostgreSQL 的标准 SQL 表中（例如项目表、联系人表、笔记表等）。
+    *   **作用:** 支持更精确的查询、推理、知识关联和自动化任务。
+    *   **状态:** **未来阶段规划。**
+*   **记忆路由/决策 (Memory Routing / Automatic Judgment):**
+    *   **实现:** (未来/高级阶段) 设计机制（规则、启发式或 LLM 驱动的 Agent）来决定：
+        *   **存储时:** 新信息应该存入哪个或哪些记忆系统。
+        *   **检索时:** 根据用户查询的意图和内容，应该优先或组合查询哪些记忆系统。
+    *   **作用:** 实现更智能、更自动化的记忆管理，逼近人类记忆的灵活性。
+    *   **状态:** **未来/高级阶段规划。**
+
+## 5. 第一阶段重点 (MVP)
 
 快速搭建可用基础，为后续迭代铺路：
 
 1.  **核心框架搭建:**
-    *   后端: Go (使用 Gin 或 Echo 框架)。
-    *   前端: React (Next.js) 或 Vue (Nuxt.js) (配合开源 UI 库)。
+    *   后端: Go (Gin)。
+    *   前端: (待定，例如 React/Vue)。
     *   数据库: PostgreSQL (启用 `pgvector` 扩展)。
-    *   文件存储: 本地存储或 MinIO。
-    *   用户认证授权。
-2.  **基础文档管理:**
-    *   文件上传、列表、基础组织（文件夹/标签）。
-    *   集成 Go 开源库进行常见格式 (PDF, DOCX) 的文本提取。
-3.  **向量化与存储:**
-    *   实现文本分块 (Chunking) 策略。
-    *   使用开源 Embedding 模型生成文本块向量。
-    *   将向量及对应文本块存入 PostgreSQL 的 `pgvector`。
-4.  **统一工作面板:**
-    *   使用开源 UI 库构建基础仪表板界面。
-    *   包含快速访问、最近文件等模块。
-5.  **基础 RAG (文档问答) 与记忆机制:**
-    *   **集成 LangChainGo** 用于流程编排和记忆管理。
-    *   实现类似 ChatGPT 的交互界面（关联文件上下文）。
-    *   后端利用 LangChainGo 编排流程：结合 PostgreSQL 标准表进行元数据过滤（可选，精确查找），然后使用 `pgvector` 进行语义相似性搜索以召回相关文档块（语义召回），构建 Prompt 并调用 LLM 生成答案。
-    *   利用 LangChainGo 的 Memory 模块管理短期对话记忆（可考虑对接 PostgreSQL 存储长期历史）。
+    *   文件存储: 本地 `uploads` 目录。
+    *   用户认证授权 (基础)。
+    *   通过 `.env` 文件管理配置 (使用 `godotenv`)。
+2.  **基础文档处理与向量存储 (知识库记忆):**
+    *   实现 `/api/v1/upload` API。
+    *   文件保存到本地。
+    *   读取文件内容 (TXT)。
+    *   使用 LangChainGo `RecursiveCharacterTextSplitter` 进行文本分块。
+    *   使用 OpenAI Embedding 模型 (`text-embedding-3-large`) 进行向量化。
+    *   将文本块、向量、元数据存入 pgvector (使用 `AddDocuments`)。
+3.  **基础 RAG 问答:**
+    *   实现 `/api/v1/chat` API。
+    *   使用 LangChainGo `pgvector.Store` 的 `SimilaritySearch` 检索相关文档块。
+    *   构建包含检索上下文的 Prompt。
+    *   调用 OpenAI LLM (`gpt-4o`) 生成回复。
+4.  **基础对话历史记忆:**
+    *   创建 `conversation_history` 表 (如上定义)。
+    *   修改 `/api/v1/chat` API：
+        *   接收/生成 `conversation_id`。
+        *   查询最近的对话历史。
+        *   将历史记录加入 Prompt。
+        *   将当前交互存入历史表。
+5.  **统一工作面板 (极简):**
+    *   提供基础的前端界面用于文件上传和聊天交互。
 
-## 5. 技术栈选型
+## 6. 技术栈选型
 
-*   **后端:** Go (Gin / Echo)
-*   **前端:** React (Next.js) / Vue (Nuxt.js)
-*   **UI 库:** (待选) Material UI (MUI), Ant Design, Chakra UI 等
-*   **数据库:** PostgreSQL (同时用于结构化数据如元数据、对话历史、配置，并启用 `pgvector` 扩展进行向量存储与搜索)
-*   **文档解析:** Go 开源库 (如 `pdfcpu`, `go-docx`, 或其他，需调研选型)
-*   **AI 核心:** LangChainGo (用于 RAG 流程编排、Memory 管理、Agent 构建), 开源 Embedding 模型, LLM API (OpenAI, Gemini 等)
-*   **文件存储:** MinIO / 本地文件系统 / 云对象存储
+*   **后端:** Go (Gin)
+*   **前端:** (待定) React (Next.js) / Vue (Nuxt.js)
+*   **UI 库:** (待定) Material UI (MUI), Ant Design, Chakra UI 等
+*   **数据库:** PostgreSQL + `pgvector` 扩展
+*   **文档解析:** (初期) Go 标准库 (TXT), (后续) Go 开源库 (PDF, DOCX 等)
+*   **AI 核心:** LangChainGo, OpenAI API (LLM: gpt-4o, Embedding: text-embedding-3-large)
+*   **文件存储:** 本地文件系统 (`uploads` 目录)
+*   **配置管理:** `.env` 文件 (使用 `godotenv` 库)
 
-## 6. 开发理念
+## 7. 开发理念
 
 *   **快速迭代:** 优先交付核心价值，小步快跑。
-*   **拥抱开源:** 最大化利用成熟的开源项目 (框架、库、工具)，避免重复造轮子，降低工作量。
-*   **混合记忆策略:** 结合结构化存储（精确查找）和向量存储（语义召回）解决 AI 记忆和信息调用问题。
-*   **模块化设计:** 各组件尽可能解耦，方便独立开发、测试和扩展。
-*   **用户中心:** 关注实际用户场景和体验。
+*   **拥抱开源:** 最大化利用成熟的开源项目。
+*   **混合记忆策略:** 逐步构建结合对话历史、向量、结构化知识的记忆系统。
+*   **模块化设计:** 组件解耦。
+*   **用户中心:** 关注实际场景。
 
-## 7. 阶段一简化架构图 (保持不变，细节体现在实现中)
+## 8. 阶段一简化架构图
 
 ```mermaid
 graph TD
     User --> FrontendUI(Web UI - Dashboard, Docs, Chat Input)
-    FrontendUI <-- REST API --> BackendAPI(Go + LangChainGo)
+    FrontendUI <-- REST API --> BackendAPI(Go + Gin + LangChainGo)
 
-    BackendAPI --> Database[(PostgreSQL + pgvector)]
-    BackendAPI --> FileStorage[(File Storage)]
-    BackendAPI --> EmbeddingModel(Embedding Model API/Service)
-    BackendAPI --> LLM(LLM API)
+    BackendAPI --> Database[(PostgreSQL + pgvector + History Table)]
+    BackendAPI --> FileStorage[(Local File Storage)]
+    BackendAPI --> OpenAI_API[OpenAI API (LLM & Embeddings)]
 
     subgraph Core Infrastructure (Phase 1)
         BackendAPI
         Database
         FileStorage
-        EmbeddingModel
-        LLM
+        OpenAI_API
     end
 
     subgraph User Interface (Phase 1)

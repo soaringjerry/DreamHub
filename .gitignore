@@ -21,5 +21,16 @@
 go.work
 go.work.sum
 
-# env file
+# Environment variables file
 .env
+
+# Uploaded files directory
+/uploads/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor specific directories
+.vscode/
+.idea/
