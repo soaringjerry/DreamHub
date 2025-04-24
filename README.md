@@ -8,7 +8,7 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 *   **文件上传与异步处理:** API Server 接收上传的文件并保存，然后将处理任务（文本分块、向量化）放入队列。Worker 进程负责后台处理这些任务。API Server 立即返回任务 ID。
 *   **个人知识库 (RAG):** Worker 将处理后的文档向量存入向量数据库 (PostgreSQL + pgvector)。Repository 层强制进行用户隔离过滤（基于 `user_id` 元数据），支持基于用户文件内容的智能问答。**(注意：目前 `user_id` 的传递机制尚待完善)**
 *   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id` 和 `user_id`），实现更连贯的 AI 交互。**(注意：历史记录的读写目前仍在 Service 层，待重构至 Repository)**
-*   **基础 API:** 提供文件上传 (`/upload`) 和聊天交互 (`/chat`) 的 API 端点。
+*   **基础 API:** 提供文件上传 (`/upload`) 和聊天交互 (`/chat`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
 
 ## 设置与运行
 
@@ -111,7 +111,7 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 
 ## API 用法示例
 
-使用 `curl` 或 Postman 等工具与 API 交互。
+使用 `curl` 或 Postman 等工具与 API 交互。完整 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
 
 ### 1. 上传文件 (构建知识库)
 
@@ -179,4 +179,4 @@ curl -X POST -H "Content-Type: application/json" -d "{\"conversation_id\":\"YOUR
 
 ## 后续开发计划
 
-详细的开发计划、架构决策和检查清单请参考 **PLAN.md** 文件。
+详细的开发计划、架构决策和检查清单请参考 [PLAN.md](PLAN.md) 文件。
