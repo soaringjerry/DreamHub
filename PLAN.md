@@ -244,25 +244,334 @@ dreamhub/
   - 观察新版本运行 24 小时无问题后，将旧版本标记为只读
   - 出现问题时可以快速回滚到旧版本
 
-## 5. 长期规划项
+## 5. CI/CD 流程部署开发测试服务器
+
+考虑到项目处于主要功能开发阶段，目前是单人开发但未来可能扩展为团队协作，建立一个基于 GitHub Actions 的 CI/CD 流程来部署开发/测试服务器是非常合适的选择。
+
+### 5.1 目标
+
+- 实现代码提交到特定分支（如 `main` 或 `develop`）后，自动进行代码检查、构建和单元测试
+- 构建应用程序的 Docker 镜像并推送到容器镜像仓库
+- 允许手动触发部署流程，将最新的 Docker 镜像部署到开发/测试服务器上
+- 确保开发/测试环境与未来的生产环境保持一致性
+
+### 5.2 技术选型
+
+- **CI/CD 工具:** GitHub Actions（利用已有经验和免费额度）
+- **代码仓库:** GitHub
+- **测试服务器:** 轻量级云服务器（如 AWS EC2、GCP Compute Engine、DigitalOcean Droplet）
+- **部署方式:** Docker + Docker Compose
+
+### 5.3 CI/CD 流程设计
+
+```mermaid
+flowchart TD
+    A[Push to main/develop 或手动触发] --> B[GitHub Actions CI]
+    B --> C[检出代码]
+    C --> D[设置 Go 环境]
+    D --> E[运行代码检查 & 静态分析]
+    E --> F[运行单元测试]
+    F -- 成功 --> G[构建 Go 二进制文件]
+    G --> H[构建 Docker 镜像]
+    H --> I[推送镜像到容器仓库]
+    I --> J{手动触发部署?}
+    J -- 是 --> K[GitHub Actions CD]
+    K --> L[通过 SSH 连接测试服务器]
+    L --> M[拉取最新 Docker 镜像]
+    M --> N[运行 docker-compose up -d]
+    N --> O[部署完成]
+
+    F -- 失败 --> P[报告测试失败]
+    E -- 失败 --> P
+```
+
+### 5.4 GitHub Actions 工作流配置
+
+#### 5.4.1 CI 工作流 (.github/workflows/ci.yml)
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          
+      - name: Install dependencies
+        run: go mod download
+        
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          
+      - name: Test
+        run: go test -v ./...
+        
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          
+      - name: Build Server
+        run: go build -o bin/server ./cmd/server
+        
+      - name: Build Worker
+        run: go build -o bin/worker ./cmd/worker
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Build and push Server image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.server
+          push: true
+          tags: ghcr.io/${{ github.repository }}/server:latest
+          
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.worker
+          push: true
+          tags: ghcr.io/${{ github.repository }}/worker:latest
+```
+
+#### 5.4.2 CD 工作流 (.github/workflows/deploy.yml)
+
+```yaml
+name: Deploy to Test Server
+
+on:
+  workflow_dispatch:  # 仅手动触发
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Copy docker-compose.yml to server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.TEST_SERVER_HOST }}
+          username: ${{ secrets.TEST_SERVER_USER }}
+          key: ${{ secrets.TEST_SERVER_SSH_KEY }}
+          source: "docker-compose.yml,.env.example"
+          target: "~/dreamhub"
+          
+      - name: Deploy to test server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.TEST_SERVER_HOST }}
+          username: ${{ secrets.TEST_SERVER_USER }}
+          key: ${{ secrets.TEST_SERVER_SSH_KEY }}
+          script: |
+            cd ~/dreamhub
+            cp .env.example .env
+            # 使用 GitHub Secrets 更新 .env 文件
+            sed -i 's/OPENAI_API_KEY=.*/OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}/g' .env
+            sed -i 's/DATABASE_URL=.*/DATABASE_URL=${{ secrets.DATABASE_URL }}/g' .env
+            # 拉取最新镜像并重启服务
+            docker-compose pull
+            docker-compose up -d
+```
+
+### 5.5 Docker 配置
+
+#### 5.5.1 Dockerfile.server
+
+```dockerfile
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN go build -o server ./cmd/server
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/server .
+COPY .env.example .env
+EXPOSE 8080
+CMD ["./server"]
+```
+
+#### 5.5.2 Dockerfile.worker
+
+```dockerfile
+FROM golang:1.23-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN go build -o worker ./cmd/worker
+
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /app/worker .
+COPY .env.example .env
+CMD ["./worker"]
+```
+
+#### 5.5.3 docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
+      POSTGRES_DB: dreamhub_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    image: ghcr.io/${GITHUB_REPOSITORY:-username/dreamhub}/server:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-mysecretpassword}@postgres:5432/dreamhub_db?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads:/app/uploads
+
+  worker:
+    image: ghcr.io/${GITHUB_REPOSITORY:-username/dreamhub}/worker:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://postgres:${POSTGRES_PASSWORD:-mysecretpassword}@postgres:5432/dreamhub_db?sslmode=disable
+      - REDIS_ADDR=redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+```
+
+### 5.6 测试服务器准备
+
+1. **服务器配置:**
+   - 推荐配置: 2 vCPU, 4GB RAM, 50GB SSD
+   - 操作系统: Ubuntu 20.04 LTS 或更新版本
+   - 开放端口: 22 (SSH), 8080 (API Server)
+
+2. **初始化步骤:**
+   ```bash
+   # 安装 Docker
+   curl -fsSL https://get.docker.com -o get-docker.sh
+   sudo sh get-docker.sh
+   
+   # 安装 Docker Compose
+   sudo curl -L "https://github.com/docker/compose/releases/download/v2.18.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+   sudo chmod +x /usr/local/bin/docker-compose
+   
+   # 创建项目目录
+   mkdir -p ~/dreamhub
+   ```
+
+3. **GitHub Secrets 配置:**
+   - `TEST_SERVER_HOST`: 测试服务器 IP 地址
+   - `TEST_SERVER_USER`: SSH 用户名
+   - `TEST_SERVER_SSH_KEY`: SSH 私钥
+   - `OPENAI_API_KEY`: OpenAI API 密钥
+   - `DATABASE_URL`: 数据库连接字符串
+   - `POSTGRES_PASSWORD`: PostgreSQL 密码
+
+### 5.7 本地开发与测试环境的协同
+
+1. **本地开发流程:**
+   - 开发者在本地使用 Docker Compose 运行依赖服务 (PostgreSQL, Redis)
+   - 直接运行 Go 应用进行开发和调试
+   - 提交代码到 GitHub 触发 CI 流程
+
+2. **测试环境使用流程:**
+   - CI 流程成功后，可以手动触发部署到测试服务器
+   - 测试服务器提供一个稳定的环境用于功能验证和演示
+   - 多人协作时，测试服务器作为集成测试的基准环境
+
+3. **环境一致性保障:**
+   - 使用相同的 Docker 镜像确保本地和测试环境的一致性
+   - 通过 `.env` 文件和环境变量管理不同环境的配置差异
+   - 所有环境使用相同版本的依赖服务
+
+## 6. 长期规划项
 
 以下是可以在系统稳定运行后考虑的长期优化方向：
 
-### 5.1 插件化 RAG
+### 6.1 插件化 RAG
 
 - 在 `memory_service` 中预留 `SourceProvider` 接口
 - 实现多种数据源适配器：`FromWebCrawler`、`FromEmail`、`FromCalendar` 等
 - 使用策略模式动态选择和组合不同的数据源
 - 新增数据源时无需修改主流程代码
 
-### 5.2 增量微调（Fine-Tuning）流水线
+### 6.2 增量微调（Fine-Tuning）流水线
 
 - 当对话与文档量达到一定规模后，从 `conversation_summary` 和高评分回答中提取训练数据
 - 定期将数据转换为 JSONL 格式，触发模型微调任务
 - 使自有模型逐渐适应特定领域的语料，减少 RAG 成本
 - 建立模型评估机制，确保微调后的模型性能提升
 
-## 6. 生产环境就绪检查清单
+## 7. 生产环境就绪检查清单
 
 在系统正式上线前，以下检查清单可以确保系统达到"金融 SaaS 级上线水准"：
 
@@ -347,7 +656,7 @@ dreamhub/
   - 实现触发向量数据、文档数据和对话历史在 72 小时内完全删除的机制
   - 使用后台任务处理删除请求
 
-## 7. 可视化增强
+## 8. 可视化增强
 
 以下可视化功能可以在系统上线后快速实现，提升用户体验和运营效率：
 
@@ -365,3 +674,63 @@ dreamhub/
 - 可以一目了然地看出哪些客户活跃度最高
 - 为销售团队提供 upsell 的数据支持
 - 可以使用 Grafana 或自定义 D3.js 可视化实现
+
+## 9. 总结
+
+通过实施上述计划，DreamHub 项目将获得以下优势：
+
+1. **开发效率提升** - CI/CD 流程自动化减少手动操作，提高开发效率
+2. **环境一致性** - Docker 容器确保开发、测试和生产环境的一致性
+3. **质量保障** - 自动化测试和代码检查提早发现问题
+4. **部署可靠性** - 标准化的部署流程减少人为错误
+5. **协作基础** - 为未来团队协作打下坚实基础
+6. **可观测性** - 完善的监控和日志系统便于问题排查
+
+特别是对于 DreamHub 这样的项目，CI/CD 流程的建立将使其从功能开发阶段平稳过渡到一个可靠、可扩展的生产系统。通过 GitHub Actions 和 Docker 容器化技术，我们可以在保持低成本的同时，获得企业级的开发和部署体验。
+
+随着项目的发展和团队的扩大，这套 CI/CD 流程可以进一步扩展，支持更复杂的部署策略（如蓝绿部署、金丝雀发布）和更全面的测试覆盖。
+
+## 10. 上线前最后 5–10% 角落检查清单
+
+以下是上线前的最后检查清单，帮助在真正部署前再把风险降到最低：
+
+| 类别            | 关注点                                          | 实践调整建议                                                                                      |
+|---------------|----------------------------------------------|----------------------------------------------------------------------------------------------|
+| **Secrets 管理**      | Worker 如何在 Key 轮换后拿到最新凭证？                      | 增加一个 sidecar（如 `hashicorp/vault-agent` 或 AWS SDK IMDS），写入短期令牌到 tmpfs，主进程收到 SIGHUP 时重新加载，无需重启。 |
+| **Schema 漂移**      | PG migration 和 pgvector 索引要在 Worker 启动前完成       | 用 k8s `initJob`（如 `golang-migrate/migrate`）做 DB 初始化；Worker 加一个 `postStart` 探针，轮询 `pg_tables` 确认 `vectors` 表已就绪。 |
+| **Embedding 成本激增** | 用户上传 500 页 PDF 时，瞬间消耗大量 Token                   | 在 `embedder_service` 中先做粗略长度估算：若超阈值，先入队"切分 & 压缩"任务（PDF→文本→LangChain `RecursiveCharacterTextSplitter`），并在 UI 显示预计成本让用户确认。 |
+| **背压与反馈**       | 队列堆积 + OpenAI 慢 → SLA 违约                            | 添加"优先级重排"：当 `embedding_latency_p95 > X` 时，将非紧急任务降级到冷流（cold stream），待空闲再升级处理。            |
+| **模型版本漂移**     | GPT-4o vs GPT-4-1106 等模型行为会悄然变化                    | 在日志和 DB 中保存每次 API 调用的 `model` 字段，方便回放和调试时重现当时使用的模型与 Prompt。                       |
+| **镜像来源可信**     | 供应链安全越来越严格，必须发布经过签名的镜像                     | 在 CI/CD 中加入 `anchore/sbom-action` 生成 SBOM，并用 `cosign sign --key cosign.key` 签名；集群启动前用 `cosign verify` 验证。 |
+| **快速失败体验**     | `/tasks/{id}` 一直轮询，Worker 崩了就卡死                         | 返回带指数退避的 `Retry-After` 提示头，在 UI 展示部分进度（如已处理页数），可从 `doc_processing_tmp` 读出断点进度。 |
+| **端到端删除**      | GDPR 删除必须触及：向量、文件、Redis、S3 备份                    | 写一个 "eraser" 任务，接收 `delete_request_id` 后并行并发四个 Goroutine（PG、向量库、S3、Redis），全部成功后发 Webhook；并写集成测试断言彻底清除。 |
+| **Chaos 演练**     | 只有自己打破系统一次，才会真正放心                              | 使用 `chaos-mesh` 或 `litmuschaos`：1) 随机杀 50% Worker；2) 注入 PG 延迟 2s；3) 拦截 OpenAI 流量 30s。系统要自动重试，不丢数据。  |
+
+### 10.1 开发者自留脚本
+
+以下是两个上线后会感谢自己的开发者自留脚本：
+
+1. **`make dev-up`**
+
+   ```bash
+   docker compose --profile dev up -d --build
+   go run ./cmd/server &
+   go run ./cmd/worker &
+   cosign verify ghcr.io/你/仓库/server:latest
+   ```
+   一条命令，完整栈起起来，镜像自动校验。
+
+2. **`scripts/post-merge.sh`**
+
+   ```bash
+   #!/usr/bin/env bash
+   set -e
+   pre-commit run --all-files
+   make lint && make test
+   docker build -f Dockerfile.server -t dreamhub/server:local .
+   ```
+   每次 `git pull` 后自动跑，保证本地环境始终绿灯。
+
+### 10.2 上线绿灯指标
+
+当 **`openai_error_rate < 1% 且 queue_wait_p95 < 2 × ingest_time`** 在 Staging 环境持续 72 小时，并且所有告警静默，方可切流量到生产。

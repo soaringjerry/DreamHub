@@ -6,11 +6,7 @@ import ReactMarkdown from 'react-markdown'; // 添加Markdown支持
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; // 添加代码高亮
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism'; // 代码高亮样式
 
-// 定义 Message 类型 (可以考虑提取到共享的 types 文件)
-interface Message {
-  sender: 'user' | 'ai';
-  content: string;
-}
+// (类型定义已移除，因为它未被使用，可能由 chatStore 提供)
 
 // 定义代码组件类型
 interface CodeProps {

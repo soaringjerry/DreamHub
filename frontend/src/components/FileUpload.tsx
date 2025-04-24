@@ -221,7 +221,7 @@ const FileUpload: React.FC = () => {
       {/* Upload Button */}
       <button
         onClick={handleUpload}
-        disabled={!selectedFile || isUploading || uploadProgress === 100 || isFileAlreadyUploaded}
+        disabled={!!(!selectedFile || isUploading || uploadProgress === 100 || isFileAlreadyUploaded)}
         className={`w-full px-4 py-2.5 rounded-lg text-white transition-all duration-200 ease-in-out
                    ${isUploading ? 'bg-gray-400 cursor-not-allowed' 
                                : !selectedFile || isFileAlreadyUploaded ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
