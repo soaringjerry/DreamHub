@@ -172,6 +172,286 @@ dreamhub/
    - worker 版本升级要兼容旧队列格式
    - 考虑给 `task` 添加 `version` 字段或使用 protobuf/JSON schema
 
+## 3.5 前后端通信架构：混合API与WebSocket
+
+### 3.5.1 通信需求分析
+
+- **问题**：当前架构使用HTTP轮询获取任务状态和AI回复，存在以下问题：
+ - 文件处理进度需要前端频繁轮询，增加服务器负载
+ - AI回复无法实现流式返回，用户体验不佳
+ - 未来多用户协作场景下缺乏实时通知机制
+ - 实时编辑功能难以实现
+
+- **方案**：采用混合架构，结合RESTful API和WebSocket的优势：
+ - 保留RESTful API处理非实时操作（文件上传、认证授权等）
+ - 引入WebSocket处理实时通信需求（进度通知、流式回复等）
+
+### 3.5.2 通信方案设计
+
+#### 完整架构图
+
+```mermaid
+graph TD
+    %% 前端组件
+    subgraph "前端"
+        FE_UI[用户界面]
+        FE_Store[状态管理/Zustand]
+        FE_WS[WebSocket客户端]
+        FE_HTTP[HTTP客户端]
+        
+        FE_UI <--> FE_Store
+        FE_Store <--> FE_WS
+        FE_Store <--> FE_HTTP
+    end
+    
+    %% 后端API服务
+    subgraph "API服务器"
+        API_Router[Gin路由]
+        API_Middleware[中间件层]
+        API_Handler[API处理层]
+        API_Service[业务逻辑层]
+        API_Repo[数据访问层]
+        API_Queue[任务队列客户端]
+        
+        API_Router --> API_Middleware
+        API_Middleware --> API_Handler
+        API_Handler --> API_Service
+        API_Service --> API_Repo
+        API_Service --> API_Queue
+    end
+    
+    %% WebSocket服务
+    subgraph "WebSocket服务器"
+        WS_Handler[WS处理器]
+        WS_Hub[连接管理Hub]
+        WS_Auth[认证中间件]
+        WS_Service[WS业务逻辑]
+        
+        WS_Handler <--> WS_Hub
+        WS_Handler --> WS_Auth
+        WS_Hub --> WS_Service
+    end
+    
+    %% 异步Worker
+    subgraph "Worker"
+        Worker_Server[Asynq服务器]
+        Worker_Handler[任务处理器]
+        Worker_Embedding[Embedding处理]
+        Worker_Repo[数据访问层]
+        
+        Worker_Server --> Worker_Handler
+        Worker_Handler --> Worker_Embedding
+        Worker_Embedding --> Worker_Repo
+    end
+    
+    %% 数据存储
+    subgraph "数据存储"
+        PG[(PostgreSQL)]
+        PGVector[(PGVector)]
+        Redis[(Redis)]
+        FileSystem[(文件系统)]
+        
+        PG --- PGVector
+    end
+    
+    %% 外部服务
+    subgraph "外部服务"
+        OpenAI[OpenAI API]
+        S3[对象存储/S3]
+    end
+    
+    %% 连接关系
+    %% 前端与后端连接
+    FE_HTTP -->|HTTP请求| API_Router
+    FE_WS <-->|WebSocket连接| WS_Handler
+    
+    %% API服务器连接
+    API_Repo -->|查询/存储| PG
+    API_Repo -->|向量操作| PGVector
+    API_Queue -->|任务入队| Redis
+    API_Service -->|文件存储| FileSystem
+    
+    %% WebSocket服务器连接
+    WS_Service -->|查询数据| PG
+    WS_Service -->|向量查询| PGVector
+    WS_Hub -->|用户消息| WS_Handler
+    
+    %% Worker连接
+    Worker_Server -->|消费任务| Redis
+    Worker_Repo -->|存储向量| PGVector
+    Worker_Repo -->|存储元数据| PG
+    Worker_Embedding -->|生成嵌入| OpenAI
+    Worker_Embedding -->|读取文件| FileSystem
+    Worker_Handler -->|状态更新| WS_Hub
+    
+    %% 数据流说明
+    classDef frontend fill:#d4f1f9,stroke:#05a,stroke-width:2px;
+    classDef backend fill:#ddf1d4,stroke:#383,stroke-width:2px;
+    classDef storage fill:#f9e4cc,stroke:#a50,stroke-width:2px;
+    classDef external fill:#e4ccf9,stroke:#539,stroke-width:2px;
+    classDef websocket fill:#f9d4e1,stroke:#b27,stroke-width:2px;
+    
+    class FE_UI,FE_Store,FE_WS,FE_HTTP frontend;
+    class API_Router,API_Middleware,API_Handler,API_Service,API_Repo,API_Queue,Worker_Server,Worker_Handler,Worker_Embedding,Worker_Repo backend;
+    class PG,PGVector,Redis,FileSystem storage;
+    class OpenAI,S3 external;
+    class WS_Handler,WS_Hub,WS_Auth,WS_Service websocket;
+```
+
+#### 简化通信流程图
+
+```mermaid
+graph TD
+    Client[前端客户端]
+    API[RESTful API]
+    WS[WebSocket服务]
+    Worker[异步Worker]
+    DB[(数据库)]
+    VectorDB[(向量数据库)]
+    
+    Client -->|文件上传/认证/非实时操作| API
+    Client <-->|实时通信| WS
+    API -->|任务入队| Worker
+    Worker -->|状态更新| WS
+    Worker -->|存储结果| DB
+    Worker -->|存储向量| VectorDB
+    WS -->|查询数据| DB
+    WS -->|查询向量| VectorDB
+```
+
+### 3.5.3 混合架构的优势
+
+1. **优化资源使用**：
+  - HTTP连接用完即释放，适合短暂交互
+  - WebSocket保持长连接，适合频繁实时通信
+
+2. **功能分离清晰**：
+  - API处理数据操作和业务逻辑
+  - WebSocket专注于实时通知和流式数据
+
+3. **渐进式实现**：
+  - 可以保留现有API架构
+  - 逐步添加WebSocket功能
+  - 平滑过渡，降低重构风险
+
+4. **更好的错误处理**：
+  - API可以返回标准HTTP状态码
+  - WebSocket可以实现自定义心跳和重连机制
+
+5. **扩展性**：
+  - 未来可以轻松添加更多实时功能
+  - 支持服务端推送事件（SSE）作为备选方案
+
+### 3.5.4 实施路线图
+
+1. **第一阶段**：基础WebSocket支持
+  - 实现WebSocket服务器和连接管理
+  - 添加文件处理进度实时通知
+  - 前端实现WebSocket连接和消息处理
+
+2. **第二阶段**：流式AI回复
+  - 修改ChatService支持流式输出
+  - 实现WebSocket消息类型和处理逻辑
+  - 前端实现打字机效果显示
+
+3. **第三阶段**：多用户协作基础
+  - 实现用户在线状态管理
+  - 添加文件操作广播机制
+  - 前端实现实时通知显示
+
+4. **第四阶段**：高级协作功能
+  - 实现文档协同编辑
+  - 添加用户光标位置同步
+  - 实现操作冲突解决机制
+
+### 3.5.5 实现方案示例
+
+#### WebSocket服务实现
+
+```go
+// 新增 WebSocket 处理器
+type WSHandler struct {
+   hub       *Hub
+   upgrader  websocket.Upgrader
+   authSvc   service.AuthService
+}
+
+// Hub 结构管理所有连接
+type Hub struct {
+   clients     map[*Client]bool
+   userClients map[string][]*Client  // 按用户ID索引客户端
+   register    chan *Client
+   unregister  chan *Client
+   broadcast   chan []byte
+   userMsg     chan UserMessage
+}
+
+// 用户消息结构
+type UserMessage struct {
+   UserID  string
+   Type    string  // "task_progress", "ai_stream", "collaboration"
+   Payload []byte
+}
+```
+
+#### Worker与WebSocket集成
+
+```go
+// 修改 EmbeddingTaskHandler 以支持进度通知
+func (h *EmbeddingTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) error {
+   // ... 现有代码 ...
+   
+   // 发送任务开始通知
+   h.wsHub.SendToUser(payload.UserID, UserMessage{
+       Type: "task_progress",
+       Payload: json.Marshal(map[string]interface{}{
+           "status": "started",
+           "taskID": t.ResultWriter().TaskID(),
+           "filename": payload.OriginalFilename,
+       }),
+   })
+   
+   // 处理过程中发送进度更新
+   for i, chunk := range chunks {
+       // 每处理10%的块发送一次进度
+       if i % (len(chunks)/10) == 0 {
+           progress := float64(i) / float64(len(chunks)) * 100
+           h.wsHub.SendToUser(payload.UserID, UserMessage{
+               Type: "task_progress",
+               Payload: json.Marshal(map[string]interface{}{
+                   "status": "processing",
+                   "taskID": t.ResultWriter().TaskID(),
+                   "progress": progress,
+               }),
+           })
+       }
+       // ... 处理块 ...
+   }
+   
+   // ... 其余代码 ...
+}
+```
+
+#### 流式AI回复实现
+
+```go
+// 修改 ChatService 以支持流式回复
+func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, userID, conversationIDStr, message string, streamCh chan<- string) {
+   // ... 前期处理与现有 HandleChatMessage 类似 ...
+   
+   // 使用流式API调用
+   err := s.llm.GenerateContentStream(ctx, llmMessages, func(chunk string) {
+       // 将每个文本块发送到通道
+       streamCh <- chunk
+   })
+   
+   // ... 错误处理 ...
+   
+   // 关闭通道表示完成
+   close(streamCh)
+}
+```
+
 ## 总结
 
 架构的核心框架（**Handler → Service → Repository**）是合理的，我们主要通过以上改进解决：
