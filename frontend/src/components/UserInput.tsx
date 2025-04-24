@@ -1,23 +1,71 @@
 // src/components/UserInput.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '../store/chatStore';
+import { Send, Sparkles, Lightbulb } from 'lucide-react'; // 导入图标
+
+// 预定义的快速提示
+const QUICK_PROMPTS = [
+  "总结文档的主要内容",
+  "提取文档中的关键信息",
+  "解释文档中的专业术语",
+  "查找文档中的重要数据",
+  "分析文档的结构和逻辑",
+];
 
 const UserInput: React.FC = () => {
   const [message, setMessage] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const [showPrompts, setShowPrompts] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const promptsRef = useRef<HTMLDivElement>(null);
 
   // --- Zustand Store Integration ---
   // 使用单独的选择器获取 action 和状态
   const sendMessage = useChatStore((state) => state.sendMessage);
   const isLoading = useChatStore((state) => state.isLoading);
+  const uploadedFiles = useChatStore((state) => state.uploadedFiles);
+
+  // 点击外部关闭提示框
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (promptsRef.current && !promptsRef.current.contains(event.target as Node)) {
+        setShowPrompts(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(event.target.value);
   };
 
+  // 自动调整 textarea 高度
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto'; // Reset height
+      const scrollHeight = textarea.scrollHeight;
+      // 设置一个最大高度，例如 120px (约 5 行)
+      const maxHeight = 120;
+      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+      // 如果内容超过最大高度，显示滚动条
+      textarea.style.overflowY = scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+  }, [message]);
+
+
   const handleSend = () => {
     if (message.trim() && !isLoading) {
       sendMessage(message.trim());
       setMessage(''); // 清空输入框
+      
+      // 自动聚焦回输入框
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 10);
     }
   };
 
@@ -29,27 +77,119 @@ const UserInput: React.FC = () => {
     }
   };
 
+  // 处理快速提示选择
+  const handlePromptSelect = (prompt: string) => {
+    setMessage(prompt);
+    setShowPrompts(false);
+    textareaRef.current?.focus();
+  };
+
+  // 切换提示面板
+  const togglePrompts = () => {
+    setShowPrompts(prev => !prev);
+  };
+
   return (
-    <div className="flex items-center space-x-2">
-      <textarea
-        value={message}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        placeholder="输入消息... (Shift+Enter 换行)"
-        rows={1} // 初始行数，可以根据内容自适应高度
-        className="flex-grow p-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:focus:ring-offset-gray-800"
-        style={{ maxHeight: '100px', overflowY: 'auto' }} // 限制最大高度并允许滚动
-        disabled={isLoading}
-      />
-      <button
-        onClick={handleSend}
-        disabled={isLoading || !message.trim()}
-        className={`px-4 py-2 rounded-md text-white transition-colors duration-200 ease-in-out
-                   ${isLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800'}
-                   disabled:opacity-50 disabled:cursor-not-allowed`}
-      >
-        发送
-      </button>
+    <div className="relative">
+      <div className={`flex items-center bg-gray-50 dark:bg-gray-700 rounded-xl transition-all duration-200 border-2 
+        ${isFocused 
+          ? 'border-primary-400 dark:border-primary-500 shadow-md' 
+          : 'border-gray-200 dark:border-gray-600'}`}>
+        
+        {/* 辅助图标 - 快捷提示按钮 */}
+        <button
+          type="button"
+          onClick={togglePrompts}
+          className={`ml-3 p-1.5 rounded-full transition-all duration-300 ${
+            showPrompts 
+              ? 'bg-primary-100 dark:bg-primary-800/40 text-primary-600 dark:text-primary-400' 
+              : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600'
+          }`}
+          aria-label="显示快捷提示"
+          title="快捷提示"
+        >
+          <Lightbulb size={18} className={showPrompts ? 'text-primary-500 animate-pulse' : ''} />
+        </button>
+        
+        {/* 文本输入区域 */}
+        <textarea
+          value={message}
+          ref={textareaRef}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          placeholder={uploadedFiles?.length > 0 
+            ? "输入问题，探索您的文档内容..."
+            : "上传文档后开始提问..."}
+          rows={1} // 初始为 1 行，将根据内容自动调整
+          className="flex-grow p-3 bg-transparent border-0 rounded-lg resize-none focus:outline-none
+                     text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+          style={{ minHeight: '48px', maxHeight: '120px', overflowY: 'hidden' }}
+          disabled={isLoading}
+        />
+        
+        {/* 辅助图标 */}
+        <span className="mr-2 text-gray-400 dark:text-gray-500">
+          <Sparkles size={18} className={`transition-all duration-300 ${isFocused ? 'text-primary-500 rotate-12' : ''}`} />
+        </span>
+        
+        {/* 发送按钮 */}
+        <button
+          onClick={handleSend}
+          disabled={isLoading || !message.trim()}
+          className={`flex items-center justify-center m-1 p-2.5 rounded-lg text-white transition-all duration-200 ease-in-out
+                     ${isLoading 
+                       ? 'bg-gray-400 cursor-not-allowed' 
+                       : message.trim() 
+                         ? 'bg-primary-600 hover:bg-primary-700 active:scale-95' 
+                         : 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'}
+                     disabled:opacity-50`}
+          aria-label="发送消息"
+        >
+          {isLoading ? (
+            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          ) : (
+            <Send size={20} className="transition-transform group-hover:translate-x-1" />
+          )}
+        </button>
+      </div>
+      
+      {/* 快捷提示下拉面板 */}
+      {showPrompts && (
+        <div 
+          ref={promptsRef}
+          className="absolute left-0 bottom-full mb-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 animate-fadeIn z-10"
+        >
+          <h3 className="px-4 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
+            快捷提示
+          </h3>
+          <div className="max-h-48 overflow-y-auto p-1">
+            {QUICK_PROMPTS.map((prompt, index) => (
+              <button
+                key={index}
+                onClick={() => handlePromptSelect(prompt)}
+                className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* 底部提示信息 */}
+      <div className="text-xs text-center mt-2 text-gray-400 dark:text-gray-500">
+        {uploadedFiles?.length > 0 
+          ? (uploadedFiles.length === 1 
+            ? `已上传 1 个文件，可以开始提问` 
+            : `已上传 ${uploadedFiles.length} 个文件，可以开始提问`)
+          : "请先上传文档再开始提问"
+        }
+      </div>
     </div>
   );
 };

@@ -26,6 +26,7 @@ go.work.sum
 
 # Uploaded files directory
 /uploads/
+/bin/
 
 # OS specific files
 .DS_Store

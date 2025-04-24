@@ -7,6 +7,14 @@ interface Message {
   content: string;
 }
 
+// 定义上传文件的类型
+interface UploadedFile {
+  name: string;
+  size: number;
+  chunks: number;
+  id: string;
+}
+
 // 定义 Store 的状态类型
 interface ChatState {
   conversationId: string | null;
@@ -15,6 +23,7 @@ interface ChatState {
   error: string | null;
   isUploading: boolean; // 添加上传状态
   uploadError: string | null; // 添加上传错误状态
+  uploadedFiles: UploadedFile[]; // 添加已上传文件列表
 }
 
 // 定义 Store 的操作类型
@@ -27,6 +36,7 @@ interface ChatActions {
   resetChat: () => void; // 添加重置聊天的 action
   setUploading: (uploading: boolean) => void; // 添加设置上传状态的 action
   setUploadError: (error: string | null) => void; // 添加设置上传错误的 action
+  addUploadedFile: (file: UploadedFile) => void; // 添加上传文件到列表
 }
 
 // 创建 Zustand Store
@@ -38,6 +48,7 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   error: null,
   isUploading: false,
   uploadError: null,
+  uploadedFiles: [], // 初始化空数组
 
   // 操作实现
   addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
@@ -49,6 +60,10 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   setUploading: (uploading) => set({ isUploading: uploading }),
 
   setUploadError: (error) => set({ uploadError: error }),
+
+  addUploadedFile: (file) => set((state) => ({ 
+    uploadedFiles: [...state.uploadedFiles, file] 
+  })),
 
   sendMessage: async (userMessage) => {
     const { addMessage, setLoading, setError, conversationId } = get();
@@ -78,19 +93,28 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
   },
 
   uploadFile: async (file) => {
-    const { setUploading, setUploadError, addMessage } = get();
+    const { setUploading, setUploadError, addMessage, addUploadedFile } = get();
     setUploading(true);
     setUploadError(null);
 
     try {
       const response = await uploadFileApi(file);
-      // 可选：上传成功后添加一条系统消息
+      
+      // 添加到已上传文件列表
+      addUploadedFile({
+        name: file.name,
+        size: file.size,
+        chunks: response.chunks,
+        id: `file-${Date.now()}` // 使用时间戳生成唯一ID
+      });
+      
+      // 上传成功后添加一条系统消息
       addMessage({ sender: 'ai', content: `文件 "${response.filename}" 上传成功，包含 ${response.chunks} 个块。` });
     } catch (err) {
       console.error("Error in uploadFile store action:", err);
       setUploadError(err instanceof Error ? err.message : '上传文件时发生未知错误');
-       // 可选：上传失败后添加一条系统消息
-       addMessage({ sender: 'ai', content: `文件上传失败: ${err instanceof Error ? err.message : '未知错误'}` });
+      // 上传失败后添加一条系统消息
+      addMessage({ sender: 'ai', content: `文件上传失败: ${err instanceof Error ? err.message : '未知错误'}` });
     } finally {
       setUploading(false);
     }
@@ -101,7 +125,8 @@ export const useChatStore = create<ChatState & ChatActions>((set, get) => ({
     messages: [],
     isLoading: false,
     error: null,
-    isUploading: false, // 同时重置上传状态
+    isUploading: false,
     uploadError: null,
+    uploadedFiles: [], // 清空已上传文件列表
   }),
 }));
