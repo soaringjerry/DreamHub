@@ -10,6 +10,55 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 *   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id` 和 `user_id`），实现更连贯的 AI 交互。**(注意：历史记录的读写目前仍在 Service 层，待重构至 Repository)**
 *   **基础 API:** 提供文件上传 (`/upload`) 和聊天交互 (`/chat`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
 
+## 系统架构
+
+```mermaid
+graph TD
+    %% 前端
+    Client[前端客户端] -->|HTTP请求| API[API服务器]
+    Client <-->|WebSocket| WS[WebSocket服务器]
+    
+    %% 后端服务
+    API -->|任务入队| Redis[(Redis队列)]
+    API -->|查询/存储| DB[(PostgreSQL)]
+    API -->|存储文件| Files[(文件存储)]
+    
+    %% WebSocket服务
+    WS -->|查询数据| DB
+    WS -->|订阅通知| Redis
+    
+    %% Worker处理
+    Worker[异步Worker] -->|消费任务| Redis
+    Worker -->|生成向量| OpenAI[OpenAI API]
+    Worker -->|存储向量| Vector[(PGVector)]
+    Worker -->|读取文件| Files
+    Worker -->|状态更新| WS
+    
+    %% 数据流说明
+    DB <--> Vector
+    
+    %% 样式
+    classDef frontend fill:#d4f1f9,stroke:#05a,stroke-width:2px;
+    classDef backend fill:#ddf1d4,stroke:#383,stroke-width:2px;
+    classDef storage fill:#f9e4cc,stroke:#a50,stroke-width:2px;
+    classDef external fill:#e4ccf9,stroke:#539,stroke-width:2px;
+    classDef websocket fill:#f9d4e1,stroke:#b27,stroke-width:2px;
+    
+    class Client frontend;
+    class API,Worker backend;
+    class DB,Vector,Redis,Files storage;
+    class OpenAI external;
+    class WS websocket;
+```
+
+主要数据流:
+1. 前端通过HTTP API上传文件或发送聊天请求
+2. API服务器将文件处理任务入队到Redis
+3. Worker消费任务队列，处理文件(分块、调用OpenAI生成向量)
+4. Worker将向量存入PGVector，并通过WebSocket发送进度更新
+5. 前端通过WebSocket接收实时进度和流式AI回复
+6. 聊天请求通过RAG检索相关文档向量，增强AI回复质量
+
 ## 设置与运行
 
 ### 前提条件

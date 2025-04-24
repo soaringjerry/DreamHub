@@ -452,6 +452,60 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, userID, c
 }
 ```
 
+### 3.5.6 架构评审与改进建议
+
+#### 架构优势
+
+| 维度 | 亮点 |
+| ---- | ---- |
+| **分层清晰** | HTTP & WS 分离；异步 Worker 把重活移出主进程，避免阻塞 |
+| **技术栈简洁** | 后端只用 Gin + PG + Redis，易于上手、减少维护面 |
+| **实时体验** | WebSocket Hub 显式存在，客户端用 Zustand 做单一数据源，前端状态管理思路比较干净 |
+| **成本友好** | pgvector 把向量和业务表放一库，省掉独立向量引擎的学习和运维成本 |
+| **可水平扩展** | API/WS/Worker 理论上都能按进程数横向扩；Redis 与 PG 都支持主从/分片 |
+
+#### 风险与短板
+
+1. **队列/调度方式不明**
+   架构图中的"Async任务器"需要明确使用消息队列（如RabbitMQ、NATS、Kafka）或至少应显示"LISTEN/NOTIFY"机制。若只是定时轮询PostgreSQL，会拖慢PG的OLTP性能，任务延迟也不稳定。
+
+2. **单实例Hub潜在单点**
+   如果WebSocket Hub运行在单节点上，重启或网络闪断会导致所有连接断开。需要实现Sticky-Session + 多实例 + Redis/NATS做集中式广播。
+
+3. **pgvector扛不住超大数据集**
+   小规模应用没问题，但超过百万条向量的检索会拖慢PostgreSQL。后期可考虑拆分到Milvus/Qdrant/Faiss服务，并通过异步更新维持一致性。
+
+4. **观测性缺位**
+   架构中缺少日志、Tracing、Metrics等可观测性组件。生产环境建议：
+   * OpenTelemetry + Jaeger/Grafana Tempo
+   * Prometheus + Grafana监控PG、Redis、Go runtime
+   * 结构化日志 + 分布式TraceID打通HTTP/WS/Worker全链路
+
+5. **安全细节未显式**
+   * HTTP/WS需要统一JWT/Session策略
+   * 对象存储需要临时签名和最小权限IAM
+   * OpenAI key的隐私保护及速率限制熔断机制
+
+6. **DevOps & CI/CD**
+   架构图未包含容器化、GitHub Actions/ArgoCD流水线等DevOps内容。团队协作时，建议在图中添加Deployment视角。
+
+#### 改进路线（按优先级）
+
+| 阶段 | 建议 | 预期收益 |
+|------|------|---------|
+| **P1 可靠性** | 引入RabbitMQ/NATS做任务总线；Worker按队列名称细分不同任务类型 | 消除轮询，降低PG压力，任务实时性可控 |
+| **P1 伸缩性** | 将WS服务做成无状态多实例 + Redis作为集中式订阅列表 | 解决单点问题，支持横向扩容 |
+| **P2 可观测** | 全链路Tracing + Metrics；集中式日志(ELK/Loki) | 快速定位瓶颈，降低平均修复时间(MTTR) |
+| **P2 安全** | 路由中间件统一Auth，细粒度权限；S3临时URL；对OpenAI调用加速率保护 | 防止滥用与数据外泄 |
+| **P3 性能** | 当向量>1M时，将pgvector拆到专门向量DB；同时给PG做分区or使用Citus | 查询速度线性可扩，OLTP不受牵连 |
+| **P3 DevOps** | 使用Docker Compose/Helm描述服务栈；CI→CD全自动 | 快速部署，多环境一致性 |
+
+#### 结论
+
+这是一个"够用先跑"的轻量全栈架构，层次清楚、技术栈简明，适合中小团队快速迭代。当面临高并发或大数据量时，应优先解决任务队列、WS高可用、观测与安全等问题，再考虑将向量检索独立出去。
+
+如果计划近期上线，可优先解决P1类问题（可靠性和伸缩性），以应对大部分不确定性。
+
 ## 总结
 
 架构的核心框架（**Handler → Service → Repository**）是合理的，我们主要通过以上改进解决：
