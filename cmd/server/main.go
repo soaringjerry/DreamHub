@@ -116,6 +116,7 @@ func main() {
 		ctx,
 		pgvector.WithConnectionURL(cfg.DatabaseURL),
 		pgvector.WithEmbedder(embedderWrapper),
+		pgvector.WithCollectionName("documents"), // Match worker's collection name
 	)
 	if err != nil {
 		logger.Error("初始化 pgvector 存储失败", "error", err)
@@ -127,7 +128,10 @@ func main() {
 	docRepo := repoPgvector.New(vectorStore)
 
 	// 创建 Asynq Client 实例 using config value
-	redisOpt := asynq.RedisClientOpt{Addr: cfg.RedisAddr}
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword, // Add Redis password from config
+	}
 	asynqClient := asynq.NewClient(redisOpt)
 	defer asynqClient.Close()
 	logger.Info("Asynq Client 初始化成功", "redisAddr", cfg.RedisAddr)

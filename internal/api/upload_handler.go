@@ -6,7 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/soaringjerry/dreamhub/internal/service"
-	"github.com/soaringjerry/dreamhub/pkg/apperr" // Import apperr
+	"github.com/soaringjerry/dreamhub/pkg/apperr"  // Import apperr
+	"github.com/soaringjerry/dreamhub/pkg/ctxutil" // Import ctxutil
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
 
@@ -46,8 +47,11 @@ func (h *UploadHandler) HandleUpload(c *gin.Context) {
 		return
 	}
 
-	// 3. Call FileService to handle upload and enqueue task
-	taskInfo, err := h.fileService.UploadFile(c.Request.Context(), userID, fileHeader)
+	// 3. Create context with UserID
+	ctx := ctxutil.WithUserID(c.Request.Context(), userID)
+
+	// 4. Call FileService to handle upload and enqueue task, passing the new context
+	taskInfo, err := h.fileService.UploadFile(ctx, userID, fileHeader)
 	if err != nil {
 		logger.Error("UploadHandler: FileService failed", "userID", userID, "filename", fileHeader.Filename, "error", err)
 

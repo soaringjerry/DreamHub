@@ -12,6 +12,7 @@ import (
 	"github.com/soaringjerry/dreamhub/pkg/config" // Import config package
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/tmc/langchaingo/schema"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
 )
 
@@ -78,7 +79,8 @@ func main() {
 	vectorStore, err := pgvector.New(
 		ctx,
 		pgvector.WithConnectionURL(cfg.DatabaseURL),
-		pgvector.WithEmbedder(embedderWrapper), // Pass the embedder wrapper
+		pgvector.WithEmbedder(embedderWrapper),   // Pass the embedder wrapper
+		pgvector.WithCollectionName("documents"), // Explicitly set the collection name
 	)
 	if err != nil {
 		logger.Error("Worker: Failed to init pgvector store", "error", err)
@@ -86,12 +88,22 @@ func main() {
 	}
 	logger.Info("Worker: pgvector store initialized")
 
+	// Attempt to trigger collection creation if it doesn't exist (speculative fix)
+	// Adding an empty list might initialize the collection schema internally.
+	_, err = vectorStore.AddDocuments(ctx, []schema.Document{})
+	if err != nil {
+		logger.Warn("Worker: Initial dummy AddDocuments call failed (might be expected if collection exists or creation needs specific handling)", "error", err)
+	}
+
 	// Document Repository
 	docRepo := repoPgvector.New(vectorStore)
 	logger.Info("Worker: Document repository initialized")
 
 	// Redis Connection Options for Asynq using config value
-	redisOpt := asynq.RedisClientOpt{Addr: cfg.RedisAddr}
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword, // Add Redis password from config
+	}
 
 	// --- Start Worker Server ---
 	logger.Info("Worker: Starting worker server...", "concurrency", cfg.WorkerConcurrency)

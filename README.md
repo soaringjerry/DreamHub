@@ -110,6 +110,17 @@ graph TD
     -- Updated index to include user_id for better query performance
     CREATE INDEX IF NOT EXISTS idx_conversation_history_user_conv_id_ts
     ON conversation_history (user_id, conversation_id, timestamp);
+
+    -- (重要性能优化) 为 embedding 元数据创建 GIN 索引
+    -- 这对于高效地按 user_id 或其他元数据过滤向量至关重要
+    -- 注意: langchaingo 可能默认创建 cmetadata 列为 json 类型。
+    --       在某些 PostgreSQL 环境下，json 类型可能缺少必要的 GIN 操作符类 (json_ops)，导致索引创建失败。
+    -- 推荐解决方案:
+    -- 步骤 1: 将 cmetadata 列转换为 jsonb 类型 (jsonb 通常性能更好且索引支持更完善)
+    ALTER TABLE langchain_pg_embedding ALTER COLUMN cmetadata TYPE jsonb USING cmetadata::jsonb;
+    -- 步骤 2: 为转换后的 jsonb 列创建 GIN 索引 (通常不需要指定操作符类)
+    CREATE INDEX IF NOT EXISTS idx_gin_embedding_metadata
+    ON langchain_pg_embedding USING GIN (cmetadata);
     ```
     *(注意: 添加了 `conversation_history` 表的创建)*
 

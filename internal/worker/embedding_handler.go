@@ -8,6 +8,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
+	"github.com/soaringjerry/dreamhub/pkg/ctxutil" // Import ctxutil
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 	"github.com/tmc/langchaingo/embeddings"
 	"github.com/tmc/langchaingo/schema"
@@ -88,12 +89,11 @@ func (h *EmbeddingTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) e
 	}
 
 	// 4. Add documents to vector store via repository
-	// The repository implementation handles adding user_id from context/payload correctly.
-	// We need to pass a context that potentially holds the user_id for the repository.
-	// For now, we use the task context `ctx`, assuming user_id might be added later.
-	// Alternatively, the repository could be modified to accept user_id directly if needed.
-	// TODO: Refine context propagation for user_id to repository.
-	err = h.docRepo.AddDocuments(ctx, docs)
+	// Create a new context containing the user ID from the payload
+	taskCtx := ctxutil.WithUserID(ctx, payload.UserID)
+
+	// Pass the new context (taskCtx) to the repository method
+	err = h.docRepo.AddDocuments(taskCtx, docs)
 	if err != nil {
 		logger.Error("Worker: Failed to add documents to vector store", "taskID", t.ResultWriter().TaskID(), "userID", payload.UserID, "filename", payload.OriginalFilename, "error", err)
 		// Retry might help if it's a DB connection issue.

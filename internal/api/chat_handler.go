@@ -8,6 +8,7 @@ import (
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/service"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
+	"github.com/soaringjerry/dreamhub/pkg/ctxutil" // Import ctxutil
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
 
@@ -44,9 +45,11 @@ func (h *ChatHandler) HandleChat(c *gin.Context) {
 	userID := req.UserID
 	logger.Info("ChatHandler: Received chat message", "userID", userID, "conversationID", req.ConversationID)
 
-	// 2. Call ChatService
-	// Pass Gin context for potential tracing, cancellation, etc.
-	chatResponse, err := h.chatService.HandleChatMessage(c.Request.Context(), userID, req.ConversationID, req.Message)
+	// 2. Create context with UserID
+	ctx := ctxutil.WithUserID(c.Request.Context(), userID)
+
+	// 3. Call ChatService, passing the new context
+	chatResponse, err := h.chatService.HandleChatMessage(ctx, userID, req.ConversationID, req.Message)
 	if err != nil {
 		logger.Error("ChatHandler: ChatService failed", "userID", userID, "conversationID", req.ConversationID, "error", err)
 

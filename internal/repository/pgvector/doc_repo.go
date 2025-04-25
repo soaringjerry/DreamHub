@@ -5,6 +5,8 @@ import (
 	"fmt" // Import fmt for error formatting
 
 	"github.com/soaringjerry/dreamhub/internal/repository" // Import the repository interface package
+	"github.com/soaringjerry/dreamhub/pkg/apperr"          // Import apperr for returning errors
+	"github.com/soaringjerry/dreamhub/pkg/ctxutil"         // Import ctxutil for UserID extraction
 	"github.com/tmc/langchaingo/schema"
 	"github.com/tmc/langchaingo/vectorstores"
 	"github.com/tmc/langchaingo/vectorstores/pgvector"
@@ -30,15 +32,14 @@ func New(store pgvector.Store) *PGVectorDocumentRepository {
 }
 
 // AddDocuments adds documents, ensuring user_id metadata is present.
-// It extracts user_id from context (placeholder for now).
+// It extracts user_id from context.
 func (r *PGVectorDocumentRepository) AddDocuments(ctx context.Context, docs []schema.Document) error {
-	// --- Placeholder: Extract user ID from context ---
-	// userID, err := r.userIDExtractor(ctx)
-	// if err != nil {
-	// 	 return fmt.Errorf("failed to get user ID from context: %w", err)
-	// }
-	userID := "placeholder_user_id" // Replace with actual context extraction
-	// --- End Placeholder ---
+	// Extract user ID from context using ctxutil
+	userID, err := ctxutil.UserIDFromContext(ctx)
+	if err != nil {
+		// Return an application error if user ID is missing
+		return apperr.Wrap(apperr.UnauthorizedError, "User ID not found in context for AddDocuments", err)
+	}
 
 	// Ensure all documents have the correct user_id metadata
 	processedDocs := make([]schema.Document, len(docs))
@@ -60,23 +61,23 @@ func (r *PGVectorDocumentRepository) AddDocuments(ctx context.Context, docs []sc
 	}
 
 	// Add documents using the underlying pgvector store
-	_, err := r.store.AddDocuments(ctx, processedDocs)
+	_, err = r.store.AddDocuments(ctx, processedDocs) // Use = instead of := because err is already declared
 	if err != nil {
-		return fmt.Errorf("pgvector AddDocuments failed: %w", err)
+		// Wrap error using apperr
+		return apperr.Wrap(apperr.VectorStoreAddError, "Failed to add documents to pgvector", err)
 	}
 	return nil
 }
 
 // SimilaritySearch performs similarity search, enforcing user_id filtering.
-// It extracts user_id from context (placeholder for now).
+// It extracts user_id from context.
 func (r *PGVectorDocumentRepository) SimilaritySearch(ctx context.Context, query string, numDocuments int, options ...vectorstores.Option) ([]schema.Document, error) {
-	// --- Placeholder: Extract user ID from context ---
-	// userID, err := r.userIDExtractor(ctx)
-	// if err != nil {
-	// 	 return nil, fmt.Errorf("failed to get user ID from context: %w", err)
-	// }
-	userID := "placeholder_user_id" // Replace with actual context extraction
-	// --- End Placeholder ---
+	// Extract user ID from context using ctxutil
+	userID, err := ctxutil.UserIDFromContext(ctx)
+	if err != nil {
+		// Return an application error if user ID is missing
+		return nil, apperr.Wrap(apperr.UnauthorizedError, "User ID not found in context for SimilaritySearch", err)
+	}
 
 	// Create the mandatory user_id filter
 	mandatoryFilter := map[string]any{"user_id": userID}

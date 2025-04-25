@@ -22,7 +22,8 @@ type Config struct {
 	DatabaseURL string `env:"DATABASE_URL,required"`
 
 	// Redis configuration
-	RedisAddr string `env:"REDIS_ADDR,default=localhost:6379"`
+	RedisAddr     string `env:"REDIS_ADDR,default=localhost:6379"`
+	RedisPassword string `env:"REDIS_PASSWORD"` // Add Redis password field
 
 	// OpenAI configuration
 	OpenAIAPIKey         string `env:"OPENAI_API_KEY,required"`
@@ -70,6 +71,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg.RedisAddr = getEnv("REDIS_ADDR", "localhost:6379")
+	cfg.RedisPassword = getEnv("REDIS_PASSWORD", "") // Load Redis password, default to empty string
 
 	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
 	if cfg.OpenAIAPIKey == "" {
