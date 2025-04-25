@@ -1,51 +1,50 @@
 // src/components/ChatInterface.tsx
 import React from 'react';
-import { useTranslation } from 'react-i18next'; // 导入 useTranslation
-import { useChatStore } from '../store/chatStore';
-import MessageDisplay from './MessageDisplay'; // 导入消息显示组件
-import UserInput from './UserInput';       // 导入用户输入组件
-import { RotateCcw } from 'lucide-react'; // 导入重置图标
+import { useTranslation } from 'react-i18next';
+// 导入新的选择器和 action
+import {
+  useChatStore,
+  useActiveMessages,
+  useActiveConversationStatus,
+} from '../store/chatStore';
+import MessageDisplay from './MessageDisplay';
+import UserInput from './UserInput';
+import { PlusSquare } from 'lucide-react'; // 导入新建图标
 
 const ChatInterface: React.FC = () => {
-  const { t } = useTranslation(); // 初始化 useTranslation
-  // --- Zustand Store Integration ---
-  // 使用单独的选择器获取状态和操作
-  const isLoading = useChatStore((state) => state.isLoading);
-  const error = useChatStore((state) => state.error);
-  const messages = useChatStore((state) => state.messages);
-  const resetChat = useChatStore((state) => state.resetChat);
-  const conversationId = useChatStore((state) => state.conversationId); // 获取 conversationId
+  const { t } = useTranslation();
+  // --- 使用新的选择器和 action ---
+  const messages = useActiveMessages(); // 获取活动对话的消息
+  const { isLoading, error } = useActiveConversationStatus(); // 获取活动对话的状态
+  const startNewConversation = useChatStore((state) => state.startNewConversation); // 获取新建对话 action
 
-  // 处理重置聊天
-  const handleResetChat = () => {
-    if (window.confirm(t('resetChatConfirmation'))) {
-      resetChat();
-    }
+  // 处理新建聊天
+  const handleNewChat = () => {
+    // 可以选择性地添加确认，但通常新建操作不需要
+    startNewConversation();
   };
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-850 rounded-b-lg"> {/* Match panel background */}
       {/* Message Display Area: Adjusted padding, background */}
       <div className="flex-grow overflow-y-auto p-4 md:p-5 space-y-5 bg-white dark:bg-gray-850 relative"> {/* Removed gradient, adjusted padding/spacing */}
-        <MessageDisplay /> {/* 渲染消息显示组件 */}
+        <MessageDisplay /> {/* MessageDisplay 现在会使用 useActiveMessages */}
 
-        {/* Top Right Controls: Reset Button */}
+        {/* Top Right Controls: New Chat Button */}
         <div className="absolute top-3 right-3 flex items-center space-x-2">
-          {/* Reset Button */}
-          {messages.length > 0 && (
-            <button
-              onClick={handleResetChat}
-              className="p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-gray-400"
-              aria-label={t('resetChatLabel')}
-              title={t('resetChatLabel')}
-            >
-              <RotateCcw size={14} /> {/* Adjusted size */}
-            </button>
-          )}
+          {/* New Chat Button */}
+          <button
+            onClick={handleNewChat}
+            className="p-1.5 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-150 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            aria-label={t('newChatLabel', 'New Chat')} // 添加 i18n key
+            title={t('newChatLabel', 'New Chat')} // 添加 i18n key
+          >
+            <PlusSquare size={14} /> {/* 使用新图标 */}
+          </button>
         </div>
       </div>
 
-      {/* Loading Indicator: Refined style */}
+      {/* Loading Indicator (uses isLoading from active conversation) */}
       {isLoading && (
         <div className="p-2.5 text-center text-xs border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <div className="flex items-center justify-center space-x-1.5 text-gray-500 dark:text-gray-400">
@@ -59,7 +58,7 @@ const ChatInterface: React.FC = () => {
         </div>
       )}
 
-      {/* Error Display: Refined style */}
+      {/* Error Display (uses error from active conversation) */}
       {error && (
         <div className="p-2.5 border-t border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
           <div className="flex items-center justify-center text-xs">

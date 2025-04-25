@@ -68,7 +68,13 @@ i18n
           userIdNotSet: "ID Not Set",
           setUserIdPlaceholder: "Set User ID",
           saveUserIdButton: "Save User ID",
-          setUserIdToUpload: "Please set a User ID before uploading files."
+          setUserIdToUpload: "Please set a User ID before uploading files.",
+          // ConversationList translations
+          conversationsTitle: "Conversations",
+          newChatLabel: "New Chat", // Reusing from ChatInterface potentially
+          noConversations: "No conversations yet.",
+          deleteConversationConfirmation: "Are you sure you want to delete this conversation?",
+          deleteConversationLabel: "Delete conversation"
         }
       },
       zh: {
@@ -124,7 +130,13 @@ i18n
           userIdNotSet: "ID 未设置",
           setUserIdPlaceholder: "设置用户ID",
           saveUserIdButton: "保存用户ID",
-          setUserIdToUpload: "请先设置用户ID才能上传文件。"
+          setUserIdToUpload: "请先设置用户ID才能上传文件。",
+          // ConversationList translations
+          conversationsTitle: "对话列表",
+          newChatLabel: "新建对话", // Reusing from ChatInterface potentially
+          noConversations: "暂无对话。",
+          deleteConversationConfirmation: "确定要删除此对话吗？",
+          deleteConversationLabel: "删除对话"
         }
       }
     }

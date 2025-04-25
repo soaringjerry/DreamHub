@@ -1,8 +1,9 @@
 // src/components/UserInput.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from 'react-i18next'; // 导入 useTranslation
-import { useChatStore } from '../store/chatStore';
-import { Send, Sparkles, Lightbulb } from 'lucide-react'; // 导入图标
+import { useTranslation } from 'react-i18next';
+// 导入新的选择器和 store
+import { useChatStore, useActiveConversationStatus } from '../store/chatStore';
+import { Send, Sparkles, Lightbulb } from 'lucide-react';
 
 // 预定义的快速提示键 (将在组件内部使用 t 函数获取实际文本)
 const QUICK_PROMPT_KEYS = [
@@ -24,8 +25,8 @@ const UserInput: React.FC = () => {
   // --- Zustand Store Integration ---
   // 使用单独的选择器获取 action 和状态
   const sendMessage = useChatStore((state) => state.sendMessage);
-  const isLoading = useChatStore((state) => state.isLoading);
-  const uploadedFiles = useChatStore((state) => state.uploadedFiles);
+  const { isLoading } = useActiveConversationStatus(); // 获取活动对话的 loading 状态
+  const uploadedFiles = useChatStore((state) => state.uploadedFiles); // 全局上传文件列表保持不变
 
   // 点击外部关闭提示框
   useEffect(() => {
