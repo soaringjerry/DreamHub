@@ -5,14 +5,14 @@ import axios from 'axios';
 // 在生产构建中，可能需要配置一个绝对 URL 或环境变量。
 const API_BASE_URL = '/api/v1';
 
-// 定义上传 API 的响应类型 (根据 README.md)
+// 定义上传 API 的响应类型 (根据 API_DOCS.md)
 interface UploadResponse {
-  message: string;
+  message: string;    // e.g., "File upload accepted, processing in background."
   filename: string;
-  chunks: number;
+  task_id: string;    // ID for the background processing task
 }
 
-// 定义聊天 API 的响应类型 (根据 README.md)
+// 定义聊天 API 的响应类型 (根据 API_DOCS.md)
 interface ChatResponse {
   conversation_id: string;
   reply: string;
@@ -21,11 +21,16 @@ interface ChatResponse {
 /**
  * 上传文件到后端进行处理。
  * @param file 要上传的文件对象
+ * @param userId 用户 ID
  * @returns Promise，包含上传结果
  */
-export const uploadFile = async (file: File): Promise<UploadResponse> => {
+export const uploadFile = async (file: File, userId: string): Promise<UploadResponse> => {
+  if (!userId) {
+    throw new Error("User ID is required for file upload.");
+  }
   const formData = new FormData();
   formData.append('file', file); // 后端期望的字段名是 'file'
+  formData.append('user_id', userId); // 使用传入的 userId
 
   try {
     const response = await axios.post<UploadResponse>(`${API_BASE_URL}/upload`, formData, {
@@ -48,10 +53,18 @@ export const uploadFile = async (file: File): Promise<UploadResponse> => {
  * 发送聊天消息到后端。
  * @param message 用户发送的消息内容
  * @param conversationId 可选的当前对话 ID，用于继续对话
+ * @param userId 用户 ID
  * @returns Promise，包含 AI 的回复和对话 ID
  */
-export const sendMessage = async (message: string, conversationId?: string): Promise<ChatResponse> => {
-  const payload: { message: string; conversation_id?: string } = { message };
+export const sendMessage = async (message: string, conversationId?: string, userId?: string): Promise<ChatResponse> => {
+  if (!userId) {
+    throw new Error("User ID is required for sending messages.");
+  }
+  // Define payload type including user_id
+  const payload: { message: string; user_id: string; conversation_id?: string } = {
+    message,
+    user_id: userId, // 使用传入的 userId
+  };
   if (conversationId) {
     payload.conversation_id = conversationId;
   }

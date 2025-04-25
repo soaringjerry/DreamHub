@@ -1,5 +1,6 @@
 // src/components/MessageDisplay.tsx
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next'; // 导入 useTranslation
 import { useChatStore } from '../store/chatStore'; // 导入 store 来获取消息
 import { User, Bot, FileText } from 'lucide-react'; // 添加文件图标
 import ReactMarkdown from 'react-markdown'; // 添加Markdown支持
@@ -18,6 +19,7 @@ interface CodeProps {
 }
 
 const MessageDisplay: React.FC = () => {
+  const { t } = useTranslation(); // 初始化 useTranslation
   const messages = useChatStore((state) => state.messages); // 从 store 获取消息列表
   const messagesEndRef = useRef<HTMLDivElement>(null); // 用于自动滚动到底部
 
@@ -26,107 +28,125 @@ const MessageDisplay: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]); // 依赖于消息列表的变化
 
-  // 如果没有消息，显示欢迎信息
+  // 如果没有消息，显示欢迎信息: Refined styling
   if (messages.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-4 space-y-4 opacity-80">
-        <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-          <Bot size={28} className="text-primary-600 dark:text-primary-400" />
+      <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-3 text-gray-500 dark:text-gray-400">
+        {/* Icon */}
+        <div className="w-14 h-14 rounded-full bg-primary-100 dark:bg-gray-700 flex items-center justify-center mb-2">
+          <Bot size={26} className="text-primary-600 dark:text-primary-400" />
         </div>
-        <h3 className="text-xl font-display font-semibold text-gray-800 dark:text-gray-200">欢迎使用 DreamHub</h3>
-        <p className="text-gray-500 dark:text-gray-400 max-w-sm">
-          上传文档并开始提问，AI 将帮助您理解和分析文档内容。
+        {/* Title */}
+        <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-200">{t('welcomeTitle')}</h3>
+        {/* Description */}
+        <p className="text-sm max-w-xs">
+          {t('welcomeMessage')}
         </p>
-        <div className="mt-2 flex flex-col items-center text-sm text-gray-400 dark:text-gray-500">
-          <p>您可以尝试以下问题：</p>
-          <ul className="list-disc text-left mt-2 space-y-1 text-primary-600 dark:text-primary-400">
-            <li>总结文档的主要内容</li>
-            <li>解释文档中的某个概念</li>
-            <li>提取文档中的关键信息</li>
+        {/* Example Questions (Optional) */}
+        {/*
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 w-full max-w-xs">
+          <p className="text-xs text-gray-400 dark:text-gray-500 mb-1.5">尝试提问:</p>
+          <ul className="text-xs space-y-1 text-primary-600 dark:text-primary-400">
+            <li>总结文档的主要观点</li>
+            <li>解释 [某个概念]</li>
+            <li>提取关键日期和事件</li>
           </ul>
         </div>
+        */}
       </div>
     );
   }
 
   // 检测消息内容是否包含代码块
   const hasCodeBlock = (content: string): boolean => {
-    return content.includes('```');
+    // More robust check for code blocks
+    return /```[\s\S]*?```/.test(content);
   };
 
   // 判断是否为文件上传成功消息
   const isFileUploadMessage = (content: string): boolean => {
-    return content.includes('上传成功') && content.includes('个块');
+    // Check against translated string
+    return content.startsWith(t('fileUploadSuccessPrefix'));
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4"> {/* Adjusted spacing */}
       {messages.map((msg, index) => (
         <div
           key={index}
-          className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+          className={`flex items-start gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`} // Adjusted gap
         >
-          {/* Avatar for AI - only show on left side */}
+          {/* Avatar for AI */}
           {msg.sender === 'ai' && (
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-primary-600 to-primary-700 shadow-md flex items-center justify-center">
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
+              isFileUploadMessage(msg.content)
+                ? 'bg-green-100 dark:bg-green-800/50' // File upload icon background
+                : 'bg-primary-100 dark:bg-gray-700' // AI icon background
+            }`}>
               {isFileUploadMessage(msg.content) ? (
-                <FileText size={20} className="text-white" />
+                <FileText size={16} className="text-green-600 dark:text-green-400" />
               ) : (
-                <Bot size={20} className="text-white" />
+                <Bot size={16} className="text-primary-600 dark:text-primary-400" />
               )}
             </div>
           )}
 
-          {/* Message Bubble */}
+          {/* Message Bubble: Refined styles */}
           <div
-            className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl shadow-soft backdrop-blur-sm
+            className={`max-w-sm md:max-w-md lg:max-w-lg px-3.5 py-2.5 rounded-lg shadow-xs text-sm leading-relaxed break-words
                        ${msg.sender === 'user'
-                         ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-tr-none' // User message style
-                         : hasCodeBlock(msg.content)
-                           ? 'bg-gray-800 dark:bg-gray-900 border border-gray-700 text-gray-100 rounded-tl-none' // AI code message style
-                           : 'bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-100 rounded-tl-none' // AI message style
+                         ? 'bg-primary-500 dark:bg-primary-600 text-white rounded-tr-md' // User message style (softer corners)
+                         : isFileUploadMessage(msg.content)
+                           ? 'bg-green-50 dark:bg-gray-750 border border-green-100 dark:border-gray-600 text-green-700 dark:text-green-300 rounded-tl-md font-medium' // File upload message style
+                           : hasCodeBlock(msg.content)
+                             ? 'bg-gray-800 dark:bg-gray-900 border border-gray-700 dark:border-gray-700 text-gray-100 rounded-tl-md p-0 overflow-hidden' // AI code message style (remove padding for highlighter)
+                             : 'bg-gray-100 dark:bg-gray-750 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-tl-md' // AI default message style
                        }`}
           >
+            {/* Code Block Rendering */}
             {msg.sender === 'ai' && hasCodeBlock(msg.content) ? (
-              <div className="prose dark:prose-invert prose-sm max-w-none">
-                <ReactMarkdown
-                  components={{
-                    code({node, inline, className, children, ...props}: CodeProps) {
-                      const match = /language-(\w+)/.exec(className || '');
-                      return !inline && match ? (
-                        <SyntaxHighlighter
-                          style={atomDark}
-                          language={match[1]}
-                          PreTag="div"
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, '')}
-                        </SyntaxHighlighter>
-                      ) : (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      );
-                    }
-                  }}
-                >
-                  {msg.content}
-                </ReactMarkdown>
-              </div>
+              <ReactMarkdown
+                // Removed className from here to fix TS error
+                components={{
+                  code({ node, inline, className, children, ...props }: CodeProps) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    return !inline && match ? (
+                      <SyntaxHighlighter
+                        style={atomDark} // Or choose another theme like oneDark, materialDark, etc.
+                        language={match[1]}
+                        PreTag="div"
+                        className="!bg-transparent !p-3" // Override background and padding
+                        {...props}
+                      >
+                        {String(children).replace(/\n$/, '')}
+                      </SyntaxHighlighter>
+                    ) : (
+                      // Inline code style
+                      <code className={`bg-gray-200 dark:bg-gray-600 px-1 py-0.5 rounded text-xs ${className}`} {...props}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  // Optional: Style other markdown elements like p, ul, etc. if needed inside code messages
+                  p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                }}
+              >
+                {msg.content}
+              </ReactMarkdown>
             ) : isFileUploadMessage(msg.content) && msg.sender === 'ai' ? (
-              <div className="flex items-center text-green-600 dark:text-green-400 font-medium">
-                <FileText size={16} className="mr-2" />
-                <span>{msg.content}</span>
-              </div>
+              // File Upload Message Content (already styled by bubble)
+              // Display the translated part if it matches, otherwise the original content
+              <span>{isFileUploadMessage(msg.content) ? t('fileUploadSuccessPrefix') + msg.content.substring(t('fileUploadSuccessPrefix').length) : msg.content}</span>
             ) : (
-              <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+              // Default Text Message Content
+              <div className="whitespace-pre-wrap">{msg.content}</div>
             )}
           </div>
 
-          {/* Avatar for User - only show on right side */}
+          {/* Avatar for User */}
           {msg.sender === 'user' && (
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-secondary-500 to-secondary-600 shadow-md flex items-center justify-center">
-              <User size={20} className="text-white" />
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary-500 dark:bg-secondary-600 shadow-sm flex items-center justify-center">
+              <User size={16} className="text-white" />
             </div>
           )}
         </div>

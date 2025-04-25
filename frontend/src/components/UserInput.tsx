@@ -1,18 +1,20 @@
 // src/components/UserInput.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'; // 导入 useTranslation
 import { useChatStore } from '../store/chatStore';
 import { Send, Sparkles, Lightbulb } from 'lucide-react'; // 导入图标
 
-// 预定义的快速提示
-const QUICK_PROMPTS = [
-  "总结文档的主要内容",
-  "提取文档中的关键信息",
-  "解释文档中的专业术语",
-  "查找文档中的重要数据",
-  "分析文档的结构和逻辑",
+// 预定义的快速提示键 (将在组件内部使用 t 函数获取实际文本)
+const QUICK_PROMPT_KEYS = [
+  "quickPromptSummarize",
+  "quickPromptExtract",
+  "quickPromptExplain",
+  "quickPromptFindData",
+  "quickPromptAnalyze",
 ];
 
 const UserInput: React.FC = () => {
+  const { t } = useTranslation(); // 初始化 useTranslation
   const [message, setMessage] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [showPrompts, setShowPrompts] = useState(false);
@@ -104,9 +106,9 @@ const UserInput: React.FC = () => {
             showPrompts 
               ? 'bg-primary-100 dark:bg-primary-800/40 text-primary-600 dark:text-primary-400' 
               : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600'
-          }`}
-          aria-label="显示快捷提示"
-          title="快捷提示"
+            }`}
+            aria-label={t('showQuickPromptsLabel')}
+            title={t('quickPromptsTitle')}
         >
           <Lightbulb size={18} className={showPrompts ? 'text-primary-500 animate-pulse' : ''} />
         </button>
@@ -119,9 +121,9 @@ const UserInput: React.FC = () => {
           onKeyDown={handleKeyDown}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={uploadedFiles?.length > 0 
-            ? "输入问题，探索您的文档内容..."
-            : "上传文档后开始提问..."}
+          placeholder={uploadedFiles?.length > 0
+            ? t('inputPlaceholderReady')
+            : t('inputPlaceholderUpload')}
           rows={1} // 初始为 1 行，将根据内容自动调整
           className="flex-grow p-3 bg-transparent border-0 rounded-lg resize-none focus:outline-none
                      text-gray-800 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
@@ -145,7 +147,7 @@ const UserInput: React.FC = () => {
                          ? 'bg-primary-600 hover:bg-primary-700 active:scale-95' 
                          : 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'}
                      disabled:opacity-50`}
-          aria-label="发送消息"
+          aria-label={t('sendMessageLabel')}
         >
           {isLoading ? (
             <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -165,16 +167,16 @@ const UserInput: React.FC = () => {
           className="absolute left-0 bottom-full mb-2 w-full bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 animate-fadeIn z-10"
         >
           <h3 className="px-4 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700">
-            快捷提示
+            {t('quickPromptsTitle')}
           </h3>
           <div className="max-h-48 overflow-y-auto p-1">
-            {QUICK_PROMPTS.map((prompt, index) => (
+            {QUICK_PROMPT_KEYS.map((promptKey, index) => (
               <button
                 key={index}
-                onClick={() => handlePromptSelect(prompt)}
+                onClick={() => handlePromptSelect(t(promptKey))} // 使用 t 函数获取文本
                 className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150"
               >
-                {prompt}
+                {t(promptKey)} {/* 显示翻译后的文本 */}
               </button>
             ))}
           </div>
@@ -183,11 +185,9 @@ const UserInput: React.FC = () => {
       
       {/* 底部提示信息 */}
       <div className="text-xs text-center mt-2 text-gray-400 dark:text-gray-500">
-        {uploadedFiles?.length > 0 
-          ? (uploadedFiles.length === 1 
-            ? `已上传 1 个文件，可以开始提问` 
-            : `已上传 ${uploadedFiles.length} 个文件，可以开始提问`)
-          : "请先上传文档再开始提问"
+        {uploadedFiles?.length > 0
+          ? t('filesUploadedHint', { count: uploadedFiles.length })
+          : t('uploadFirstHint')
         }
       </div>
     </div>
