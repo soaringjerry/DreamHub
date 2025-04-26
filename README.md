@@ -1,3 +1,5 @@
+
+
 # DreamHub
 
 DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过集成个人知识库和对话记忆，提高信息处理和交互效率。
@@ -9,6 +11,7 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 *   **个人知识库 (RAG):** Worker 将处理后的文档向量存入向量数据库 (PostgreSQL + pgvector)。Repository 层强制进行用户隔离过滤（基于 `user_id` 元数据），支持基于用户文件内容的智能问答。**(注意：目前 `user_id` 的传递机制尚待完善)**
 *   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id` 和 `user_id`），实现更连贯的 AI 交互。**(注意：历史记录的读写目前仍在 Service 层，待重构至 Repository)**
 *   **基础 API:** 提供文件上传 (`/upload`) 和聊天交互 (`/chat`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
+*   **前端界面:** 提供了一个基于 React 的用户界面，用于文件上传、聊天交互和对话管理。详细前端文档请参考 [frontend/FRONTEND_DOCS.md](frontend/FRONTEND_DOCS.md)。
 
 ## 系统架构
 
@@ -87,42 +90,15 @@ graph TD
     ```
     **注意:** 如果容器已存在，您可能需要先使用 `docker stop <container_name> && docker rm <container_name>` 来停止并删除旧容器。
 
-3.  **启用 pgvector 扩展并创建表:**
-    使用数据库客户端 (如 Navicat, DBeaver, psql) 连接到数据库:
-    *   主机: `localhost`
-    *   端口: `5432`
-    *   数据库: `dreamhub_db`
-    *   用户名: `postgres`
-    *   密码: (您在上面设置的密码)
-    执行以下 SQL:
-    ```sql
-    CREATE EXTENSION IF NOT EXISTS vector;
-
-    CREATE TABLE IF NOT EXISTS conversation_history (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        conversation_id UUID NOT NULL,
-        user_id VARCHAR(255), -- Added user_id for isolation (adjust type/length if needed)
-        sender_role VARCHAR(10) NOT NULL CHECK (sender_role IN ('user', 'ai')),
-        message_content TEXT NOT NULL,
-        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        metadata JSONB
-    );
-    -- Updated index to include user_id for better query performance
-    CREATE INDEX IF NOT EXISTS idx_conversation_history_user_conv_id_ts
-    ON conversation_history (user_id, conversation_id, timestamp);
-
-    -- (重要性能优化) 为 embedding 元数据创建 GIN 索引
-    -- 这对于高效地按 user_id 或其他元数据过滤向量至关重要
-    -- 注意: langchaingo 可能默认创建 cmetadata 列为 json 类型。
-    --       在某些 PostgreSQL 环境下，json 类型可能缺少必要的 GIN 操作符类 (json_ops)，导致索引创建失败。
-    -- 推荐解决方案:
-    -- 步骤 1: 将 cmetadata 列转换为 jsonb 类型 (jsonb 通常性能更好且索引支持更完善)
-    ALTER TABLE langchain_pg_embedding ALTER COLUMN cmetadata TYPE jsonb USING cmetadata::jsonb;
-    -- 步骤 2: 为转换后的 jsonb 列创建 GIN 索引 (通常不需要指定操作符类)
-    CREATE INDEX IF NOT EXISTS idx_gin_embedding_metadata
-    ON langchain_pg_embedding USING GIN (cmetadata);
-    ```
-    *(注意: 添加了 `conversation_history` 表的创建)*
+3.  **初始化数据库:**
+	使用数据库客户端 (如 Navicat, DBeaver, psql) 连接到数据库:
+	*   主机: `localhost`
+	*   端口: `5432`
+	*   数据库: `dreamhub_db`
+	*   用户名: `postgres`
+	*   密码: (您在步骤 2 中设置的密码)
+	打开并执行项目根目录下的 `init_db.sql` 文件中的所有 SQL 语句。这个脚本会启用 `vector` 扩展并创建所有必需的表和索引（包括 `conversation_history`, `documents`, `tasks`, 和 `langchain_pg_embedding`）。
+	**注意:** 该脚本会删除并重新创建 `langchain_pg_embedding` 表以确保向量维度正确，请在已有数据的数据库上谨慎操作。
 
 4.  **创建 `.env` 文件:**
     复制根目录下的 `.env.example` 文件为 `.env`，并根据您的环境填入必要的值，特别是 `OPENAI_API_KEY` 和 `DATABASE_URL` (确保密码正确)。
@@ -135,6 +111,7 @@ graph TD
     OPENAI_API_KEY=sk-YOUR_OPENAI_API_KEY_HERE
     DATABASE_URL=postgres://postgres:mysecretpassword@localhost:5432/dreamhub_db?sslmode=disable
     # REDIS_ADDR=localhost:6379 # 如果 Redis 不在默认地址，请取消注释并修改
+    # REDIS_PASSWORD=your_redis_password # 如果您的 Redis 服务器需要密码，请取消注释并设置
     ```
 
 5.  **安装 Go 依赖:**

@@ -440,9 +440,13 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, userID, c
    // ... 前期处理与现有 HandleChatMessage 类似 ...
    
    // 使用流式API调用
+   // TODO (2025-04-26): 当前 GenerateContentStream 的实现是临时的，
+   // 因为 langchaingo v0.1.13 中 openai.LLM 的流式选项 (llms.WithStreaming) 无效。
+   // 需要进一步研究正确的流式 API (可能是独立的 Stream 方法或检查 GenerateContent 的响应)。
+   // 暂时调用非流式方法。
    err := s.llm.GenerateContentStream(ctx, llmMessages, func(chunk string) {
-       // 将每个文本块发送到通道
-       streamCh <- chunk
+   	// 将每个文本块发送到通道
+   	streamCh <- chunk
    })
    
    // ... 错误处理 ...

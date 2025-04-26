@@ -33,8 +33,8 @@ func (h *UploadHandler) HandleUpload(c *gin.Context) {
 	userID := c.PostForm("user_id")
 	if userID == "" {
 		// Use apperr for validation error
-		errResp := apperr.NewValidationError("Missing user_id field")
-		c.JSON(http.StatusBadRequest, gin.H{"error": errResp.Message, "code": errResp.Code})
+		errResp := apperr.ErrValidation("Missing user_id field") // Use ErrValidation helper
+		c.JSON(errResp.HTTPStatus, gin.H{"error": errResp.Message, "code": errResp.Code})
 		return
 	}
 
@@ -42,43 +42,57 @@ func (h *UploadHandler) HandleUpload(c *gin.Context) {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		logger.Warn("UploadHandler: Failed to get file from form", "userID", userID, "error", err)
-		errResp := apperr.Wrap(apperr.ValidationError, "Failed to get file from request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": errResp.Message, "code": errResp.Code})
+		// Use CodeInvalidArgument and correct Wrap signature: Wrap(err, code, message)
+		errResp := apperr.Wrap(err, apperr.CodeInvalidArgument, "Failed to get file from request")
+		c.JSON(errResp.HTTPStatus, gin.H{"error": errResp.Message, "code": errResp.Code})
 		return
 	}
 
 	// 3. Create context with UserID
 	ctx := ctxutil.WithUserID(c.Request.Context(), userID)
 
-	// 4. Call FileService to handle upload and enqueue task, passing the new context
-	taskInfo, err := h.fileService.UploadFile(ctx, userID, fileHeader)
+	// 4. Open the uploaded file
+	file, err := fileHeader.Open()
+	if err != nil {
+		logger.Error("UploadHandler: Failed to open uploaded file", "userID", userID, "filename", fileHeader.Filename, "error", err)
+		errResp := apperr.Wrap(err, apperr.CodeInternal, "Failed to open uploaded file")
+		c.JSON(errResp.HTTPStatus, gin.H{"error": errResp.Message, "code": errResp.Code})
+		return
+	}
+	defer file.Close() // Ensure file is closed
+
+	// 5. Call FileService to handle upload and enqueue task, passing the new context and correct parameters
+	// UploadFile expects: ctx, filename, fileSize, contentType, fileData io.Reader
+	// It returns: *entity.Document, taskID string, error
+	_, taskID, err := h.fileService.UploadFile(ctx, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"), file)
 	if err != nil {
 		logger.Error("UploadHandler: FileService failed", "userID", userID, "filename", fileHeader.Filename, "error", err)
 
 		// Handle specific AppError types
 		var appErr *apperr.AppError
 		if errors.As(err, &appErr) {
-			statusCode := http.StatusInternalServerError // Default to 500
-			switch appErr.Code {
-			case apperr.ValidationError, apperr.FileUploadError, apperr.FileSaveError:
-				statusCode = http.StatusBadRequest
-			case apperr.NotFoundError:
-				statusCode = http.StatusNotFound
-				// Add other specific cases as needed
-			}
-			c.JSON(statusCode, gin.H{"error": appErr.Message, "code": appErr.Code})
+			// Use HTTPStatus from AppError directly
+			// Use correct ErrorCode constants
+			// Assuming FileUploadError and FileSaveError map to CodeInternal for now
+			// switch appErr.Code {
+			// case apperr.CodeValidation: // Already handled above? Maybe for content validation?
+			// case apperr.CodeInternal: // For FileUploadError, FileSaveError
+			// case apperr.CodeNotFound:
+			// }
+			c.JSON(appErr.HTTPStatus, gin.H{"error": appErr.Message, "code": appErr.Code})
 		} else {
 			// Handle unexpected errors
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "An unexpected error occurred during file upload", "code": apperr.UnknownError})
+			unexpectedErr := apperr.Wrap(err, apperr.CodeUnknown, "An unexpected error occurred during file upload")
+			c.JSON(unexpectedErr.HTTPStatus, gin.H{"error": unexpectedErr.Message, "code": unexpectedErr.Code})
 		}
 		return
 	}
 
-	// 4. Return success response (202 Accepted)
-	logger.Info("UploadHandler: File upload accepted for processing", "userID", userID, "filename", fileHeader.Filename, "taskID", taskInfo.ID)
+	// 6. Return success response (202 Accepted) using the returned taskID
+	logger.Info("UploadHandler: File upload accepted for processing", "userID", userID, "filename", fileHeader.Filename, "taskID", taskID)
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":  "File upload accepted, processing in background.",
 		"filename": fileHeader.Filename,
-		"task_id":  taskInfo.ID,
+		"task_id":  taskID, // Use the returned taskID string
 	})
 }

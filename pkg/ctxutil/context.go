@@ -2,37 +2,59 @@ package ctxutil
 
 import (
 	"context"
-	"errors"
 )
 
-// ctxKey is an unexported type for context keys defined in this package.
-// This prevents collisions with keys defined in other packages.
-type ctxKey string
+// CtxKey 定义了用于 context.Context 的键类型，以避免冲突。
+type CtxKey string
 
-// userIDKey is the context key for the user ID.
-const userIDKey ctxKey = "user_id"
+const (
+	// UserIDKey 是存储用户 ID 的 context key。
+	UserIDKey CtxKey = "user_id"
+	// TraceIDKey 是存储追踪 ID 的 context key。
+	TraceIDKey CtxKey = "trace_id"
+	// TenantIDKey 是存储租户 ID 的 context key (如果需要多租户)。
+	// TenantIDKey CtxKey = "tenant_id"
+)
 
-// ErrUserIDNotFound indicates that the user ID was not found in the context.
-var ErrUserIDNotFound = errors.New("user ID not found in context")
-
-// WithUserID returns a new context with the provided user ID added.
+// WithUserID 将用户 ID 添加到 context 中。
 func WithUserID(ctx context.Context, userID string) context.Context {
-	if userID == "" {
-		// Avoid storing empty user IDs, though validation should happen earlier.
-		return ctx
-	}
-	return context.WithValue(ctx, userIDKey, userID)
+	return context.WithValue(ctx, UserIDKey, userID)
 }
 
-// UserIDFromContext retrieves the user ID from the context.
-// It returns the user ID and nil error if found, otherwise returns an empty string
-// and ErrUserIDNotFound.
-func UserIDFromContext(ctx context.Context) (string, error) {
-	userID, ok := ctx.Value(userIDKey).(string)
-	if !ok || userID == "" {
-		return "", ErrUserIDNotFound
+// GetUserID 从 context 中获取用户 ID。如果不存在则返回空字符串。
+func GetUserID(ctx context.Context) string {
+	if userID, ok := ctx.Value(UserIDKey).(string); ok {
+		return userID
 	}
-	return userID, nil
+	return ""
 }
 
-// TODO: Add similar functions for TraceID or other context values if needed.
+// WithTraceID 将追踪 ID 添加到 context 中。
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	return context.WithValue(ctx, TraceIDKey, traceID)
+}
+
+// GetTraceID 从 context 中获取追踪 ID。如果不存在则返回空字符串。
+func GetTraceID(ctx context.Context) string {
+	if traceID, ok := ctx.Value(TraceIDKey).(string); ok {
+		return traceID
+	}
+	return ""
+}
+
+/*
+// 如果需要多租户支持，可以取消以下注释
+
+// WithTenantID 将租户 ID 添加到 context 中。
+func WithTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, TenantIDKey, tenantID)
+}
+
+// GetTenantID 从 context 中获取租户 ID。如果不存在则返回空字符串。
+func GetTenantID(ctx context.Context) string {
+	if tenantID, ok := ctx.Value(TenantIDKey).(string); ok {
+		return tenantID
+	}
+	return ""
+}
+*/

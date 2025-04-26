@@ -1,125 +1,85 @@
 package config
 
 import (
-	"fmt" // 移到这里
+	"log"
 	"os"
 	"strconv"
-	"time"
+	"sync"
 
-	"github.com/joho/godotenv"
-	"github.com/soaringjerry/dreamhub/pkg/logger" // Use our logger
+	"github.com/joho/godotenv" // 用于加载 .env 文件
 )
 
-// Config holds all configuration for the application.
+// Config 存储应用程序的所有配置。
 type Config struct {
-	// Environment specific
-	Environment string `env:"ENVIRONMENT,default=development"` // e.g., development, staging, production
-
-	// Server configuration
-	ServerPort string `env:"SERVER_PORT,default=8080"`
-
-	// Database configuration
-	DatabaseURL string `env:"DATABASE_URL,required"`
-
-	// Redis configuration
-	RedisAddr     string `env:"REDIS_ADDR,default=localhost:6379"`
-	RedisPassword string `env:"REDIS_PASSWORD"` // Add Redis password field
-
-	// OpenAI configuration
-	OpenAIAPIKey         string `env:"OPENAI_API_KEY,required"`
-	OpenAIModel          string `env:"OPENAI_MODEL,default=gpt-4o"`
-	OpenAIEmbeddingModel string `env:"OPENAI_EMBEDDING_MODEL,default=text-embedding-3-large"`
-
-	// File Upload configuration
-	UploadDir string `env:"UPLOAD_DIR,default=uploads"`
-
-	// Chat configuration
-	MaxHistoryMessages int `env:"MAX_HISTORY_MESSAGES,default=10"`
-
-	// Worker / Embedding configuration
-	WorkerConcurrency    int           `env:"WORKER_CONCURRENCY,default=10"`
-	SplitterChunkSize    int           `env:"SPLITTER_CHUNK_SIZE,default=1000"`
-	SplitterChunkOverlap int           `env:"SPLITTER_CHUNK_OVERLAP,default=200"`
-	EmbeddingTimeout     time.Duration `env:"EMBEDDING_TIMEOUT,default=5m"` // Example timeout for embedding
-
-	// Add other configurations as needed (e.g., JWT secrets, CORS origins)
+	ServerPort        string // API 服务器监听端口
+	DatabaseURL       string // PostgreSQL 连接字符串
+	RedisAddr         string // Redis 服务器地址
+	RedisPassword     string // Redis 密码 (新增)
+	OpenAIAPIKey      string // OpenAI API 密钥
+	UploadDir         string // 文件上传目录
+	LogLevel          string // 日志级别 (e.g., "debug", "info", "warn", "error")
+	WorkerConcurrency int    // Worker 并发数
+	// 可以根据需要添加更多配置项...
+	// 例如：JWTSecret, FrontendURL, VectorDBAddr 等
 }
 
-// Load loads configuration from environment variables.
-// It loads .env file first if it exists.
-func Load() (*Config, error) {
-	// Load .env file, ignore error if it doesn't exist
-	err := godotenv.Load()
-	if err != nil {
-		logger.Warn("Config: .env file not found or failed to load, relying on system env vars", "error", err)
-	} else {
-		logger.Info("Config: .env file loaded successfully")
-	}
+var (
+	cfg  *Config
+	once sync.Once
+)
 
-	cfg := &Config{}
+// LoadConfig 加载配置。
+// 它首先尝试从 .env 文件加载（如果存在），然后从环境变量加载。
+// 环境变量会覆盖 .env 文件中的值。
+// 这个函数是幂等的，只会加载一次配置。
+func LoadConfig() *Config {
+	once.Do(func() {
+		// 尝试加载 .env 文件，忽略错误（可能文件不存在）
+		_ = godotenv.Load() // godotenv.Load(".env") 也可以
 
-	// Manually load env vars into struct fields, checking required ones
-	// A library like 'cleanenv' or 'viper' could automate this, but manual is fine for now.
+		workerConcurrencyStr := getEnv("WORKER_CONCURRENCY", "10") // 默认并发数为 10
+		workerConcurrency, err := strconv.Atoi(workerConcurrencyStr)
+		if err != nil {
+			log.Printf("警告: 无效的 WORKER_CONCURRENCY 值 '%s'，将使用默认值 10。错误: %v", workerConcurrencyStr, err)
+			workerConcurrency = 10
+		}
 
-	cfg.Environment = getEnv("ENVIRONMENT", "development")
-	cfg.ServerPort = getEnv("SERVER_PORT", "8080")
+		cfg = &Config{
+			ServerPort:        getEnv("SERVER_PORT", "8080"),          // 默认端口 8080
+			DatabaseURL:       getEnv("DATABASE_URL", ""),             // 没有默认值，必须提供
+			RedisAddr:         getEnv("REDIS_ADDR", "localhost:6379"), // 默认 Redis 地址
+			RedisPassword:     getEnv("REDIS_PASSWORD", ""),           // 加载 Redis 密码，默认为空
+			OpenAIAPIKey:      getEnv("OPENAI_API_KEY", ""),           // 没有默认值，必须提供
+			UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),      // 默认上传目录
+			LogLevel:          getEnv("LOG_LEVEL", "info"),            // 默认日志级别 info
+			WorkerConcurrency: workerConcurrency,
+		}
 
-	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
-	if cfg.DatabaseURL == "" {
-		logger.Error("Config error: DATABASE_URL environment variable is required")
-		return nil, fmt.Errorf("DATABASE_URL is required")
-	}
-
-	cfg.RedisAddr = getEnv("REDIS_ADDR", "localhost:6379")
-	cfg.RedisPassword = getEnv("REDIS_PASSWORD", "") // Load Redis password, default to empty string
-
-	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
-	if cfg.OpenAIAPIKey == "" {
-		logger.Error("Config error: OPENAI_API_KEY environment variable is required")
-		return nil, fmt.Errorf("OPENAI_API_KEY is required")
-	}
-	cfg.OpenAIModel = getEnv("OPENAI_MODEL", "gpt-4o")
-	cfg.OpenAIEmbeddingModel = getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
-
-	cfg.UploadDir = getEnv("UPLOAD_DIR", "uploads")
-
-	cfg.MaxHistoryMessages = getEnvAsInt("MAX_HISTORY_MESSAGES", 10)
-	cfg.WorkerConcurrency = getEnvAsInt("WORKER_CONCURRENCY", 10)
-	cfg.SplitterChunkSize = getEnvAsInt("SPLITTER_CHUNK_SIZE", 1000)
-	cfg.SplitterChunkOverlap = getEnvAsInt("SPLITTER_CHUNK_OVERLAP", 200)
-	cfg.EmbeddingTimeout = getEnvAsDuration("EMBEDDING_TIMEOUT", 5*time.Minute)
-
-	logger.Info("Configuration loaded successfully")
-	return cfg, nil
+		// 可以在这里添加对必要配置项的检查
+		if cfg.DatabaseURL == "" {
+			log.Fatal("错误: 环境变量 DATABASE_URL 未设置。")
+		}
+		if cfg.OpenAIAPIKey == "" {
+			log.Fatal("错误: 环境变量 OPENAI_API_KEY 未设置。")
+		}
+	})
+	return cfg
 }
 
-// getEnv retrieves an environment variable or returns a default value.
+// Get 返回已加载的配置实例。
+func Get() *Config {
+	if cfg == nil {
+		// 如果尚未加载，则加载配置
+		// 这在直接调用 Get() 而非先调用 LoadConfig() 的情况下很有用
+		return LoadConfig()
+	}
+	return cfg
+}
+
+// getEnv 获取环境变量的值，如果环境变量未设置，则返回默认值。
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
 	}
 	return defaultValue
 }
-
-// getEnvAsInt retrieves an environment variable as an integer or returns a default value.
-func getEnvAsInt(key string, defaultValue int) int {
-	valueStr := getEnv(key, "")
-	if value, err := strconv.Atoi(valueStr); err == nil {
-		return value
-	}
-	logger.Warn("Config: Invalid or missing integer value for env var, using default", "key", key, "default", defaultValue)
-	return defaultValue
-}
-
-// getEnvAsDuration retrieves an environment variable as a duration or returns a default value.
-func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
-	valueStr := getEnv(key, "")
-	if value, err := time.ParseDuration(valueStr); err == nil {
-		return value
-	}
-	logger.Warn("Config: Invalid or missing duration value for env var, using default", "key", key, "default", defaultValue)
-	return defaultValue
-}
-
-// Need to import fmt for error messages
-// import "fmt" // Duplicate removed, already imported at the top

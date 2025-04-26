@@ -13,7 +13,7 @@ import (
 
 // RunServer starts the Asynq worker server.
 // It takes the Redis connection options, worker concurrency, and necessary dependencies for handlers.
-func RunServer(redisOpt asynq.RedisConnOpt, concurrency int, docRepo repository.DocumentRepository, embedder embeddings.Embedder) error {
+func RunServer(redisOpt asynq.RedisConnOpt, concurrency int, docRepo repository.DocumentRepository, vectorRepo repository.VectorRepository, embedder embeddings.Embedder) error {
 	// Create a new Asynq server instance.
 	if concurrency <= 0 {
 		concurrency = 10 // Default concurrency if invalid value provided
@@ -50,7 +50,7 @@ func RunServer(redisOpt asynq.RedisConnOpt, concurrency int, docRepo repository.
 	mux := asynq.NewServeMux()
 
 	// Create handlers with their dependencies.
-	embeddingHandler := NewEmbeddingTaskHandler(docRepo, embedder)
+	embeddingHandler := NewEmbeddingTaskHandler(docRepo, vectorRepo, embedder) // Pass vectorRepo
 
 	// Register handlers for specific task types.
 	mux.Handle(entity.TaskTypeEmbedding, embeddingHandler)

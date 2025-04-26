@@ -1,173 +1,240 @@
 package main
 
 import (
-	"context" // 引入 json 包用于序列化任务载荷
+	"context"
+	"errors" // Import errors package for As
 	"fmt"
-
-	// "log" // 使用 pkg/logger 替换
 	"net/http"
 	"os"
-
-	// "strings" // Will be unused after refactor
-	// "time" // Will be unused after refactor
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	// "github.com/google/uuid" // Will be unused after refactor
-	"github.com/jackc/pgx/v5/pgxpool" // 引入 pgx 连接池 (needed for ChatService init)
-	// "github.com/joho/godotenv"           // 不再直接使用，由 config 包处理
-	// 引入 embeddings 接口包 (needed for AppContext embedder field) - TODO: Refactor embedder wrapper
-	// Needed for ChatService init
-	"github.com/tmc/langchaingo/llms/openai" // 引入 openai 实现包
-
-	// "github.com/tmc/langchaingo/schema" // Will be unused after refactor
-
-	// 引入 textsplitter 包
-	// 引入 vectorstores 包 (用于过滤选项)
-	"github.com/tmc/langchaingo/vectorstores/pgvector" // 引入 pgvector 包
-
-	"github.com/hibiken/asynq"                      // 引入 asynq 任务队列包
-	"github.com/soaringjerry/dreamhub/internal/api" // 引入 API Handler 包
-
-	// 引入内部实体包
-	// 引入仓库接口包
-	repoPgvector "github.com/soaringjerry/dreamhub/internal/repository/pgvector" // 引入 pgvector 仓库实现包 (带别名)
-	"github.com/soaringjerry/dreamhub/internal/service"                          // 引入服务包
-	"github.com/soaringjerry/dreamhub/pkg/config"                                // 引入配置包
-	"github.com/soaringjerry/dreamhub/pkg/logger"                                // 引入日志包
+	"github.com/soaringjerry/dreamhub/internal/api" // Import API handlers
+	"github.com/soaringjerry/dreamhub/internal/repository/pgvector"
+	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // Import Postgres implementations
+	"github.com/soaringjerry/dreamhub/internal/service"             // Import Service implementations
+	"github.com/soaringjerry/dreamhub/internal/service/llm"         // Import LLM provider implementation
+	"github.com/soaringjerry/dreamhub/internal/service/queue"       // Import Queue client implementation
+	"github.com/soaringjerry/dreamhub/internal/service/storage"     // Import Storage implementation
+	"github.com/soaringjerry/dreamhub/pkg/apperr"                   // Import apperr
+	"github.com/soaringjerry/dreamhub/pkg/config"                   // 导入 config 包
+	"github.com/soaringjerry/dreamhub/pkg/logger"                   // 导入 logger 包
 )
 
-// Constants moved to config
-// const uploadDir = "uploads"
-// const maxHistoryMessages = 10
-
-// ChatMessage 定义接收聊天消息的结构体
-// ChatMessage 和 ChatResponse 已移动到 internal/entity/chat.go
-
-// AppContext is no longer needed as dependencies are injected directly.
-// type AppContext struct { ... }
-
-// --- Wrapper to satisfy embeddings.Embedder interface ---
-// TODO: Move this wrapper to a shared internal package
-type openAIEmbedderWrapper struct {
-	client *openai.LLM
-}
-
-func (w *openAIEmbedderWrapper) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
-	return w.client.CreateEmbedding(ctx, texts)
-}
-
-func (w *openAIEmbedderWrapper) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
-	embeddings, err := w.client.CreateEmbedding(ctx, []string{text})
-	if err != nil {
-		return nil, err
-	}
-	if len(embeddings) == 0 {
-		return nil, fmt.Errorf("no embedding returned for query")
-	}
-	return embeddings[0], nil
-}
-
-// --- End Wrapper ---
-
 func main() {
-	// Load configuration
-	cfg, err := config.Load()
+	// --- 1. Initialization Phase ---
+	logger.Info("服务器初始化开始...")
+	ctx, cancel := context.WithCancel(context.Background()) // Context for initialization and shutdown signals
+	defer cancel()                                          // Ensure cancel is called eventually
+
+	// Load Config
+	cfg := config.LoadConfig()
+	logger.Info("配置加载完成。", "port", cfg.ServerPort, "redis", cfg.RedisAddr, "logLevel", cfg.LogLevel)
+
+	// Initialize Logger (already done implicitly by first Info call)
+	logger.Info("日志系统初始化完成。")
+
+	// Initialize Database Connection Pool
+	dbPool, err := postgres.NewDB(ctx, cfg)
 	if err != nil {
-		// Logger might not be fully initialized here if config loading fails early
-		// Use standard log for this specific critical error
-		fmt.Fprintf(os.Stderr, "Failed to load configuration: %v\n", err)
+		logger.Error("数据库连接池初始化失败", "error", err)
+		os.Exit(1)
+	}
+	defer dbPool.Close() // Ensure pool is closed on exit
+
+	// Initialize Asynq Client (Task Queue)
+	taskQueueClient := queue.NewAsynqClient(cfg)
+	// defer taskQueueClient.Close() // Add Close method to interface and call here if needed
+
+	// Initialize File Storage
+	fileStorage, err := storage.NewLocalStorage(cfg)
+	if err != nil {
+		logger.Error("本地文件存储初始化失败", "error", err)
 		os.Exit(1)
 	}
 
-	// Initialize logger (potentially reconfigure based on cfg.Environment)
-	// For now, logger is initialized in its init()
-
-	ctx := context.Background()
-
-	// Dependencies are now loaded from cfg
-	// openaiAPIKey := cfg.OpenAIAPIKey
-	// databaseURL := cfg.DatabaseURL
-	// redisAddr := cfg.RedisAddr
-
-	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Initialize LLM Provider
+	llmProvider, err := llm.NewOpenAIProvider(cfg)
 	if err != nil {
-		logger.Error("无法连接到数据库", "error", err)
+		logger.Error("LLM Provider 初始化失败", "error", err)
 		os.Exit(1)
 	}
-	defer dbPool.Close()
-	logger.Info("数据库连接池初始化成功")
 
-	// Use config values for OpenAI client
-	client, err := openai.New(
-		openai.WithModel(cfg.OpenAIModel),
-		openai.WithEmbeddingModel(cfg.OpenAIEmbeddingModel),
-		openai.WithToken(cfg.OpenAIAPIKey),
-	)
-	if err != nil {
-		logger.Error("初始化 OpenAI 客户端失败", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("OpenAI 客户端初始化成功")
+	// Initialize Repositories
+	chatRepo := postgres.NewPostgresChatRepository(dbPool)
+	docRepo := postgres.NewPostgresDocumentRepository(dbPool)
+	vectorRepo := pgvector.NewPGVectorRepository(dbPool)
+	taskRepo := postgres.NewPostgresTaskRepository(dbPool)
 
-	embedderWrapper := &openAIEmbedderWrapper{client: client}
+	// Initialize Services
+	// TODO: Initialize RAGService and MemoryService when available
+	chatService := service.NewChatService(chatRepo, llmProvider /*, ragService, memoryService */)
+	fileService := service.NewFileService(fileStorage, docRepo, taskRepo, taskQueueClient, vectorRepo)
 
-	// Use config value for DatabaseURL
-	vectorStore, err := pgvector.New(
-		ctx,
-		pgvector.WithConnectionURL(cfg.DatabaseURL),
-		pgvector.WithEmbedder(embedderWrapper),
-		pgvector.WithCollectionName("documents"), // Match worker's collection name
-	)
-	if err != nil {
-		logger.Error("初始化 pgvector 存储失败", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("pgvector 存储初始化成功")
-
-	// 创建 DocumentRepository 实例
-	docRepo := repoPgvector.New(vectorStore)
-
-	// 创建 Asynq Client 实例 using config value
-	redisOpt := asynq.RedisClientOpt{
-		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword, // Add Redis password from config
-	}
-	asynqClient := asynq.NewClient(redisOpt)
-	defer asynqClient.Close()
-	logger.Info("Asynq Client 初始化成功", "redisAddr", cfg.RedisAddr)
-	// --- Instantiate Services ---
-	fileService := service.NewFileService(asynqClient)
-	// Instantiate ChatService (Injecting llm client directly, not the wrapper)
-	chatService := service.NewChatService(dbPool, client, docRepo)
-
-	// --- Instantiate Handlers ---
-	uploadHandler := api.NewUploadHandler(fileService)
+	// Initialize API Handlers
 	chatHandler := api.NewChatHandler(chatService)
+	fileHandler := api.NewFileHandler(fileService)
 
-	// AppContext is removed.
+	logger.Info("所有依赖初始化完成。")
 
-	router := gin.Default()
-	router.MaxMultipartMemory = 8 << 20 // 8 MiB
-	apiV1 := router.Group("/api/v1")
-	{
-		// Use the new handler methods
-		apiV1.POST("/upload", uploadHandler.HandleUpload)
-		apiV1.POST("/chat", chatHandler.HandleChat)
-	}
-	router.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+	// --- 2. Setup Gin Engine & Middleware ---
+	// gin.SetMode(gin.ReleaseMode) // Set based on config/env
+	router := gin.New()
+
+	// Middleware order matters: Recovery -> Logger -> Error Handler -> (Auth) -> Routes
+	router.Use(gin.Recovery())            // Recover from panics
+	router.Use(requestLoggerMiddleware()) // Log requests
+	router.Use(errorHandlerMiddleware())  // Handle application errors
+
+	// TODO: Add Authentication Middleware
+	// authMiddleware := api.NewAuthMiddleware(...)
+	// apiV1.Use(authMiddleware.Authenticate())
+
+	// --- 3. Register Routes ---
+	// Health Check (outside API group, no auth needed)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Use config value for server port
-	serverAddr := ":" + cfg.ServerPort
-	logger.Info("Server starting", "address", serverAddr)
-	if err := router.Run(serverAddr); err != nil {
-		logger.Error("Failed to run server", "error", err)
+	// API v1 Group
+	apiV1 := router.Group("/api/v1")
+	{
+		// Register routes from handlers
+		chatHandler.RegisterRoutes(apiV1)
+		fileHandler.RegisterRoutes(apiV1)
+		// Register other handlers here...
+	}
+	logger.Info("API 路由注册完成。")
+
+	// --- 4. Start HTTP Server ---
+	serverAddr := fmt.Sprintf(":%s", cfg.ServerPort)
+	srv := &http.Server{
+		Addr:    serverAddr,
+		Handler: router,
+		// ReadTimeout:  5 * time.Second, // Add timeouts for production
+		// WriteTimeout: 10 * time.Second,
+		// IdleTimeout:  120 * time.Second,
+	}
+
+	logger.Info("服务器准备启动...", "address", serverAddr)
+
+	// Start server in a goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("服务器启动失败", "error", err)
+			cancel() // Signal shutdown on server start failure
+		}
+	}()
+
+	// --- 5. Graceful Shutdown ---
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block until a signal is received or context is cancelled
+	select {
+	case sig := <-quit:
+		logger.Info("收到关闭信号", "signal", sig.String())
+	case <-ctx.Done():
+		logger.Info("上下文取消，开始关闭服务器...")
+	}
+
+	// Create a deadline context for shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second) // Increased timeout
+	defer shutdownCancel()
+
+	logger.Info("正在优雅地关闭服务器...")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("服务器关闭失败", "error", err)
 		os.Exit(1)
+	}
+
+	// Close other resources like DB pool (already deferred)
+	// Close Asynq client if Close method is added
+
+	logger.Info("服务器已成功关闭。")
+}
+
+// requestLoggerMiddleware logs request details using slog.
+func requestLoggerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		raw := c.Request.URL.RawQuery
+
+		// Process request
+		c.Next() // Important: call Next first to get status code and errors
+
+		// Log request details after handling
+		latency := time.Since(start)
+		clientIP := c.ClientIP()
+		method := c.Request.Method
+		statusCode := c.Writer.Status()
+		// Get error message if any middleware/handler set it
+		errorMessage := ""
+		if len(c.Errors) > 0 {
+			errorMessage = c.Errors.String() // Get all errors as a string
+		}
+
+		logFields := []interface{}{
+			"status", statusCode,
+			"latency", latency.String(),
+			"ip", clientIP,
+			"method", method,
+			"path", path,
+		}
+		if raw != "" {
+			logFields = append(logFields, "query", raw)
+		}
+		if errorMessage != "" {
+			logFields = append(logFields, "error", errorMessage)
+		}
+
+		// Use logger.Ctx to potentially include trace_id if set by another middleware
+		reqCtxLogger := logger.Ctx(c.Request.Context())
+
+		if statusCode >= 500 {
+			reqCtxLogger.Error("[GIN]", logFields...)
+		} else if statusCode >= 400 {
+			reqCtxLogger.Warn("[GIN]", logFields...)
+		} else {
+			reqCtxLogger.Info("[GIN]", logFields...)
+		}
 	}
 }
 
-// handleUpload function removed as its logic is now in api.UploadHandler and service.FileService
+// errorHandlerMiddleware catches errors set in the context (e.g., by ShouldBindJSON)
+// or returned by handlers (if using c.Error()) and converts AppErrors to JSON responses.
+func errorHandlerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next() // Process request first
 
-// handleChat function and its helpers (loadConversationHistory, saveMessageToHistory, buildLLMMessages)
-// removed as their logic is now in api.ChatHandler and service.ChatService
+		// Check for errors after handler execution
+		err := c.Errors.Last() // Get the last error
+		if err == nil {
+			return // No error
+		}
+
+		// Use errors.As to check if it's an AppError
+		var appErr *apperr.AppError
+		if errors.As(err.Err, &appErr) {
+			// Log the application error details
+			logger.WarnContext(c.Request.Context(), "应用程序错误",
+				"code", appErr.Code,
+				"message", appErr.Message,
+				"details", appErr.Details,
+				"original_error", appErr.Err, // Log original error if wrapped
+			)
+			// Return structured JSON error response
+			c.AbortWithStatusJSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		} else {
+			// If it's not an AppError, treat as internal server error
+			logger.ErrorContext(c.Request.Context(), "未处理的内部错误", "error", err.Err)
+			// Return generic internal server error response
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				"error": apperr.New(apperr.CodeInternal, "发生内部服务器错误"),
+			})
+		}
+	}
+}

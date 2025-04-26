@@ -2,123 +2,144 @@ package main
 
 import (
 	"context"
-	"fmt" // 移到这里
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/hibiken/asynq"
-	// "github.com/joho/godotenv" // Not used directly, handled by config
-	repoPgvector "github.com/soaringjerry/dreamhub/internal/repository/pgvector"
-	"github.com/soaringjerry/dreamhub/internal/worker"
-	"github.com/soaringjerry/dreamhub/pkg/config" // Import config package
-	"github.com/soaringjerry/dreamhub/pkg/logger"
-	"github.com/tmc/langchaingo/llms/openai"
-	"github.com/tmc/langchaingo/schema"
-	"github.com/tmc/langchaingo/vectorstores/pgvector"
+	"github.com/soaringjerry/dreamhub/internal/repository/pgvector" // Import pgvector repo impl
+	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // Import postgres repo impl
+	"github.com/soaringjerry/dreamhub/internal/service/embedding"   // Import embedding provider impl
+	"github.com/soaringjerry/dreamhub/internal/service/storage"     // Import storage impl
+	"github.com/soaringjerry/dreamhub/internal/worker/handlers"     // Import handlers
+	"github.com/soaringjerry/dreamhub/pkg/config"                   // 导入 config 包
+	"github.com/soaringjerry/dreamhub/pkg/logger"                   // 导入 logger 包
+	"github.com/tmc/langchaingo/textsplitter"                       // Import textsplitter
 )
 
-// --- Copied Embedder Wrapper ---
-// TODO: Move this wrapper to a shared internal package (e.g., internal/infra/openai)
-// to avoid duplication between cmd/server and cmd/worker.
-type openAIEmbedderWrapper struct {
-	client *openai.LLM
-}
-
-func (w *openAIEmbedderWrapper) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
-	return w.client.CreateEmbedding(ctx, texts)
-}
-func (w *openAIEmbedderWrapper) EmbedQuery(ctx context.Context, text string) ([]float32, error) {
-	embeddings, err := w.client.CreateEmbedding(ctx, []string{text})
-	if err != nil {
-		return nil, err
-	}
-	if len(embeddings) == 0 {
-		return nil, fmt.Errorf("no embedding returned")
-	} // Simplified error
-	return embeddings[0], nil
-}
-
-// --- End Copied Wrapper ---
+// TODO: 将任务类型定义移到更合适的位置 (e.g., internal/tasks or internal/entity)
+const (
+	// TypeEmbedding 是用于生成 embedding 的任务类型。
+	TypeEmbedding = "embedding:generate"
+)
 
 func main() {
-	// Load configuration
-	cfg, err := config.Load()
+	// --- 1. Initialization Phase ---
+	logger.Info("Worker 初始化开始...")
+	ctx, cancel := context.WithCancel(context.Background()) // Context for initialization and shutdown signals
+	defer cancel()
+
+	// Load Config
+	cfg := config.LoadConfig()
+	logger.Info("Worker 配置加载完成。", "redis", cfg.RedisAddr, "concurrency", cfg.WorkerConcurrency, "logLevel", cfg.LogLevel)
+
+	// Initialize Logger
+	logger.Info("Worker 日志系统初始化完成。")
+
+	// Initialize Database Connection Pool
+	dbPool, err := postgres.NewDB(ctx, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Worker: Failed to load configuration: %v\n", err)
+		logger.Error("数据库连接池初始化失败", "error", err)
+		os.Exit(1)
+	}
+	defer dbPool.Close()
+
+	// Initialize File Storage
+	fileStorage, err := storage.NewLocalStorage(cfg)
+	if err != nil {
+		logger.Error("本地文件存储初始化失败", "error", err)
 		os.Exit(1)
 	}
 
-	// Initialize logger (potentially reconfigure based on cfg.Environment)
-	// For now, logger is initialized in its init()
+	// Initialize Embedding Provider
+	embeddingProvider, err := embedding.NewOpenAIEmbeddingProvider(cfg)
+	if err != nil {
+		logger.Error("Embedding Provider 初始化失败", "error", err)
+		os.Exit(1)
+	}
 
-	// --- Dependency Initialization ---
-	ctx := context.Background()
+	// Initialize Repositories
+	docRepo := postgres.NewPostgresDocumentRepository(dbPool)
+	vectorRepo := pgvector.NewPGVectorRepository(dbPool)
+	taskRepo := postgres.NewPostgresTaskRepository(dbPool) // Initialize TaskRepo
 
-	// Config values are now in cfg
-	// openaiAPIKey := cfg.OpenAIAPIKey
-	// databaseURL := cfg.DatabaseURL
-	// redisAddr := cfg.RedisAddr
-
-	// OpenAI Client (for Embedder)
-	// TODO: Refactor OpenAI client creation into a shared function/package.
-	// Use config values for OpenAI client specific to embedding
-	llmClient, err := openai.New(
-		// openai.WithModel(cfg.OpenAIModel), // Model might not be needed for embedding
-		openai.WithEmbeddingModel(cfg.OpenAIEmbeddingModel),
-		openai.WithToken(cfg.OpenAIAPIKey),
+	// Initialize Text Splitter
+	// TODO: Read ChunkSize and ChunkOverlap from config if defined
+	chunkSize := 1000   // Default chunk size
+	chunkOverlap := 200 // Default chunk overlap
+	// if cfg.SplitterChunkSize > 0 { chunkSize = cfg.SplitterChunkSize }
+	// if cfg.SplitterChunkOverlap >= 0 { chunkOverlap = cfg.SplitterChunkOverlap }
+	textSplitter := textsplitter.NewRecursiveCharacter(
+		textsplitter.WithChunkSize(chunkSize),
+		textsplitter.WithChunkOverlap(chunkOverlap),
 	)
-	if err != nil {
-		logger.Error("Worker: Failed to init OpenAI client", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("Worker: OpenAI client initialized")
-	embedderWrapper := &openAIEmbedderWrapper{client: llmClient}
+	logger.Info("文本分割器初始化完成。", "chunk_size", chunkSize, "chunk_overlap", chunkOverlap)
 
-	// PGVector Store
-	// TODO: Refactor PGVector store creation into a shared function/package.
-	// Use config value for DatabaseURL
-	vectorStore, err := pgvector.New(
-		ctx,
-		pgvector.WithConnectionURL(cfg.DatabaseURL),
-		pgvector.WithEmbedder(embedderWrapper),   // Pass the embedder wrapper
-		pgvector.WithCollectionName("documents"), // Explicitly set the collection name
+	// Initialize Task Handler
+	embeddingHandler := handlers.NewEmbeddingTaskHandler(
+		fileStorage,
+		docRepo,
+		vectorRepo,
+		taskRepo, // Pass TaskRepo
+		embeddingProvider,
+		textSplitter, // Pass TextSplitter
 	)
-	if err != nil {
-		logger.Error("Worker: Failed to init pgvector store", "error", err)
-		os.Exit(1)
-	}
-	logger.Info("Worker: pgvector store initialized")
 
-	// Attempt to trigger collection creation if it doesn't exist (speculative fix)
-	// Adding an empty list might initialize the collection schema internally.
-	_, err = vectorStore.AddDocuments(ctx, []schema.Document{})
-	if err != nil {
-		logger.Warn("Worker: Initial dummy AddDocuments call failed (might be expected if collection exists or creation needs specific handling)", "error", err)
-	}
+	logger.Info("Worker 依赖初始化完成。")
 
-	// Document Repository
-	docRepo := repoPgvector.New(vectorStore)
-	logger.Info("Worker: Document repository initialized")
-
-	// Redis Connection Options for Asynq using config value
-	redisOpt := asynq.RedisClientOpt{
+	// --- 2. Setup Asynq Server ---
+	redisConnOpt := asynq.RedisClientOpt{
 		Addr:     cfg.RedisAddr,
-		Password: cfg.RedisPassword, // Add Redis password from config
+		Password: cfg.RedisPassword, // Uncommented to include password
+		// DB:       cfg.RedisDB,
 	}
 
-	// --- Start Worker Server ---
-	logger.Info("Worker: Starting worker server...", "concurrency", cfg.WorkerConcurrency)
-	// Pass concurrency from config to RunServer
-	if err := worker.RunServer(redisOpt, cfg.WorkerConcurrency, docRepo, embedderWrapper); err != nil {
-		logger.Error("Worker: Could not start worker server", "error", err)
+	srv := asynq.NewServer(
+		redisConnOpt,
+		asynq.Config{
+			Concurrency: cfg.WorkerConcurrency,
+			ErrorHandler: asynq.ErrorHandlerFunc(func(ctx context.Context, task *asynq.Task, err error) {
+				logger.ErrorContext(ctx, "Worker 处理任务失败",
+					"type", task.Type(),
+					"error", err,
+				)
+			}),
+			// Logger: logger.NewAsynqLogger(logger.GetLogger()), // Optional custom logger
+		},
+	)
+
+	// --- 3. Register Task Handlers ---
+	mux := asynq.NewServeMux()
+	// Register the actual handler
+	mux.Handle(TypeEmbedding, embeddingHandler)
+	// Register other handlers here...
+	logger.Info("Asynq 任务处理器注册完成。")
+
+	// --- 4. Start Asynq Server ---
+	logger.Info("Worker 准备启动...", "concurrency", cfg.WorkerConcurrency)
+	if err := srv.Start(mux); err != nil {
+		logger.Error("无法启动 Worker 服务器", "error", err)
+		cancel() // Signal shutdown
 		os.Exit(1)
 	}
+
+	// --- 5. Graceful Shutdown ---
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case sig := <-quit:
+		logger.Info("收到关闭信号", "signal", sig.String())
+	case <-ctx.Done():
+		logger.Info("上下文取消，开始关闭 Worker...")
+	}
+
+	logger.Info("正在优雅地关闭 Worker...")
+	// Asynq's Shutdown waits for active tasks to complete.
+	srv.Shutdown()
+	logger.Info("Worker 已成功关闭。")
 }
 
-// Note: We are missing the *pgxpool.Pool dependency here, which might be needed
-// if the worker needs to interact with the main database (e.g., updating task status).
-// This needs to be added if required by future worker tasks or status updates.
-// Also, the embedder wrapper and potentially client/store creation logic should be refactored
-// into shared internal packages to avoid code duplication between cmd/server and cmd/worker.
+// Placeholder function removed as it's no longer used.
 
-// Need to import "fmt" for the simplified error message in EmbedQuery
-// import "fmt" // Duplicate removed, already imported at the top
+// TODO: Implement Asynq logger adapter if needed.
