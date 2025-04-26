@@ -129,16 +129,35 @@ jobs:
           test -f .env.example && echo ".env.example found" || echo ".env.example NOT FOUND"
           test -f init_db.sql && echo "init_db.sql found" || echo "init_db.sql NOT FOUND"
 
-      - name: Copy necessary files to server
+      - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "docker-compose.yml,.env.example,init_db.sql" # Files to copy from repo
-          target: "/root/dreamhub/" # Target directory on server
-          strip_components: 0 # Keep the original filenames
+          source: "docker-compose.yml"
+          target: "/root/dreamhub/"
+
+      - name: Copy .env.example to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: ".env.example"
+          target: "/root/dreamhub/"
+
+      - name: Copy init_db.sql to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          source: "init_db.sql"
+          target: "/root/dreamhub/"
 
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
