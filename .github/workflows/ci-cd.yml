@@ -120,26 +120,20 @@ jobs:
     needs: build_and_push_image # Run deploy only after image is pushed
     environment: production # Optional: Define a GitHub environment for deployment secrets/rules
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Add checkout step to access repository files
+
       - name: Install sshpass
         run: sudo apt-get update && sudo apt-get install -y sshpass
 
       - name: Copy files to server via sshpass scp
         run: |
-          echo "--- Debugging file copy step ---"
-          echo "Current directory: $(pwd)"
-          echo "Listing files:"
-          ls -lah
-          echo "---------------------------------"
-
           # Ensure target directory exists on server before copying
           sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT || 22 }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /root/dreamhub"
 
           # Copy files using sshpass and scp
-          echo "Attempting to copy docker-compose.yml..."
           sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/docker-compose.yml
-          echo "Attempting to copy .env.example..."
           sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./.env.example ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/.env.example
-          echo "Attempting to copy init_db.sql..."
           sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./init_db.sql ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/init_db.sql
         env:
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }} # Make password available to the script
