@@ -6,6 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5" // Correct import path for pgx.Tx
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	// "github.com/pgvector/pgvector-go" // Remove unused import again
 	"github.com/soaringjerry/dreamhub/pkg/apperr"  // 引入 apperr 包
 	"github.com/soaringjerry/dreamhub/pkg/config"  // 引入 config 包
 	"github.com/soaringjerry/dreamhub/pkg/ctxutil" // 引入 ctxutil 包
@@ -39,8 +41,16 @@ func NewDB(ctx context.Context, cfg *config.Config) (*DB, error) {
 	poolConfig.MaxConnLifetime = 1 * time.Hour
 	poolConfig.HealthCheckPeriod = 1 * time.Minute
 
+	// --- Remove AfterConnect hook again ---
+	// poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+	// 	pgvector.Register(conn.TypeMap()) // This function seems unavailable or problematic
+	// 	return nil
+	// }
+	// --- End of removal ---
+
 	// Créer le pool de connexions
-	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	// Use the standard NewWithConfig without the AfterConnect hook for now
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig) // Revert to original call if AfterConnect was the only change
 	if err != nil {
 		return nil, apperr.Wrap(err, apperr.CodeUnavailable, "无法创建数据库连接池") // Use CodeUnavailable
 	}
@@ -54,7 +64,9 @@ func NewDB(ctx context.Context, cfg *config.Config) (*DB, error) {
 		return nil, apperr.Wrap(err, apperr.CodeUnavailable, "无法连接到数据库 (ping 失败)") // Use CodeUnavailable
 	}
 
-	logger.InfoContext(ctx, "PostgreSQL 连接池初始化成功。")
+	// No registration needed here
+
+	logger.InfoContext(ctx, "PostgreSQL 连接池初始化成功。") // Revert log message
 	return &DB{Pool: pool}, nil
 }
 

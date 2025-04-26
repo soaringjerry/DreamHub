@@ -11,7 +11,7 @@ require (
 	github.com/hibiken/asynq v0.25.1
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/joho/godotenv v1.5.1
-	github.com/pgvector/pgvector-go v0.1.1
+	github.com/pgvector/pgvector-go v0.3.0
 	github.com/tmc/langchaingo v0.1.14-0.20250417210124-77b2d7bf3afb
 )
 

@@ -74,7 +74,8 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 
 		// 假设表结构为 (embedding vector, document text, cmetadata jsonb)
 		// 如果有 collection_id 列，需要调整
-		rows[i] = []interface{}{chunk.Embedding, chunk.Content, metadataBytes}
+		// 将 pgvector.Vector 转换为字符串表示形式，以绕过可能的 CopyFrom 类型处理问题
+		rows[i] = []interface{}{chunk.Embedding.String(), chunk.Content, metadataBytes}
 	}
 
 	// 定义要复制的列名
