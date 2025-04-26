@@ -35,10 +35,8 @@ services:
       retries: 5
 
   app:
-    # 这里使用我们 CI 构建并推送到 GHCR 的镜像
-    # GITHUB_REPOSITORY 会在 Actions 运行时自动替换为 "用户名/仓库名"
-    # 请将 your_github_username/your_repo_name 替换为你实际的值，或依赖 Actions 自动填充
-    image: ghcr.io/${GITHUB_REPOSITORY:-your_github_username/your_repo_name}:latest
+    # Using the specific image built and pushed by CI
+    image: ghcr.io/soaringjerry/dreamhub:latest
     restart: always
     depends_on:
       postgres:
