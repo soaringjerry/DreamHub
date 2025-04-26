@@ -8,7 +8,7 @@ export default defineConfig({
   test: { // Add this test configuration
     globals: true,
     environment: 'jsdom',
-    setupFiles: './src/setupTests.ts', // Optional setup file
+    // setupFiles: './src/setupTests.ts', // Removed as the file doesn't exist yet
     css: true,
   } as UserConfig['test'], // Cast to UserConfig['test']
   server: { // 添加服务器配置
