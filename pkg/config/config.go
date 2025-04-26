@@ -11,11 +11,13 @@ import (
 
 // Config 存储应用程序的所有配置。
 type Config struct {
-	ServerPort        string // API 服务器监听端口
-	DatabaseURL       string // PostgreSQL 连接字符串
-	RedisAddr         string // Redis 服务器地址
-	RedisPassword     string // Redis 密码 (新增)
-	OpenAIAPIKey      string // OpenAI API 密钥
+	ServerPort    string // API 服务器监听端口
+	DatabaseURL   string // PostgreSQL 连接字符串
+	RedisAddr     string // Redis 服务器地址
+	RedisPassword string // Redis 密码 (新增)
+	OpenAIAPIKey  string // OpenAI API 密钥
+	OpenAIModel   string // OpenAI 聊天模型名称 (新增)
+	// OpenAIEmbeddingModel string // TODO: Add if needed for embedding model config
 	UploadDir         string // 文件上传目录
 	LogLevel          string // 日志级别 (e.g., "debug", "info", "warn", "error")
 	WorkerConcurrency int    // Worker 并发数
@@ -45,13 +47,15 @@ func LoadConfig() *Config {
 		}
 
 		cfg = &Config{
-			ServerPort:        getEnv("SERVER_PORT", "8080"),          // 默认端口 8080
-			DatabaseURL:       getEnv("DATABASE_URL", ""),             // 没有默认值，必须提供
-			RedisAddr:         getEnv("REDIS_ADDR", "localhost:6379"), // 默认 Redis 地址
-			RedisPassword:     getEnv("REDIS_PASSWORD", ""),           // 加载 Redis 密码，默认为空
-			OpenAIAPIKey:      getEnv("OPENAI_API_KEY", ""),           // 没有默认值，必须提供
-			UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),      // 默认上传目录
-			LogLevel:          getEnv("LOG_LEVEL", "info"),            // 默认日志级别 info
+			ServerPort:    getEnv("SERVER_PORT", "8080"),          // 默认端口 8080
+			DatabaseURL:   getEnv("DATABASE_URL", ""),             // 没有默认值，必须提供
+			RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"), // 默认 Redis 地址
+			RedisPassword: getEnv("REDIS_PASSWORD", ""),           // 加载 Redis 密码，默认为空
+			OpenAIAPIKey:  getEnv("OPENAI_API_KEY", ""),           // 没有默认值，必须提供
+			OpenAIModel:   getEnv("OPENAI_MODEL", ""),             // 新增：加载聊天模型名称，默认为空
+			// OpenAIEmbeddingModel: getEnv("OPENAI_EMBEDDING_MODEL", ""), // TODO: Add if needed
+			UploadDir:         getEnv("UPLOAD_DIR", "./uploads"), // 默认上传目录
+			LogLevel:          getEnv("LOG_LEVEL", "info"),       // 默认日志级别 info
 			WorkerConcurrency: workerConcurrency,
 		}
 

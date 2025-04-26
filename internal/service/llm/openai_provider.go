@@ -27,9 +27,13 @@ func NewOpenAIProvider(cfg *config.Config) (service.LLMProvider, error) {
 		// 使用 pkg/apperr 中定义的错误类型
 		return nil, apperr.New(apperr.CodeInvalidArgument, "OpenAI API Key 未配置")
 	}
-	// TODO: 从配置中读取模型名称等参数
-	modelName := "gpt-4.1-2025-04-141" // 或者 "gpt-4", "gpt-4o" 等
-	// modelName := cfg.OpenAIModelName
+	// 从配置中读取模型名称，如果未设置则使用默认值 gpt-4o
+	modelName := cfg.OpenAIModel
+	if modelName == "" {
+		modelName = "gpt-4o" // Default model
+		logger.Info("OpenAIModel 未在配置中设置，使用默认模型。", "defaultModel", modelName)
+	}
+	// modelName := "gpt-4.1-2025-04-141" // 或者 "gpt-4", "gpt-4o" 等 // Remove hardcoded value
 
 	// 使用 functional options 创建 OpenAI LLM 客户端
 	// 更多选项见: https://pkg.go.dev/github.com/tmc/langchaingo/llms/openai#New
