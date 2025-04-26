@@ -91,49 +91,50 @@ dreamhub/
 - **方案**：
   - 在 `repository/pgvector/doc_repo.go` 中强制包含 `user_id` 和 `source_type` 过滤条件
   - 查询方法内部固定添加这些过滤参数，不依赖上层调用者传入
-  - 在接口定义时使用 Context 传递用户信息
-  - **增强**：在 `vector_repo.Insert()` / `Search()` 内部强制附加 `tenant_id`，接口签名干脆不暴露该字段
+  - 在接口定义时使用 Context 传递用户信息 **(状态: 已在 Service 层向下传递带 user_id 的 Context)**
+  - **增强**：在 `vector_repo.Insert()` / `Search()` 内部强制附加 `tenant_id`，接口签名干脆不暴露该字段 **(状态: 依赖 Repository 实现)**
 
 ### 2.2 异步 Embedding 处理
 
 - **问题**：上传大文档时，同步生成 Embedding 会导致请求超时
 - **方案**：
-  - 引入任务队列（Redis Stream、RabbitMQ 或 asynq 库）
-  - 文件上传后立即返回 `task_id`，异步进行文档处理
-  - 增加 `/api/v1/tasks/{id}` 端点供前端轮询任务状态
-  - Worker 进程负责消费队列，处理 Embedding，更新任务状态
+  - 引入任务队列（Redis Stream、RabbitMQ 或 asynq 库）**(状态: 已使用 Asynq + Redis)**
+  - 文件上传后立即返回 `task_id`，异步进行文档处理 **(状态: API 已实现)**
+  - 增加 `/api/v1/tasks/{id}` 端点供前端轮询任务状态 **(状态: API 已实现)**
+  - Worker 进程负责消费队列，处理 Embedding，更新任务状态 **(状态: Worker 核心逻辑已修复并可运行，但状态更新待完善)**
   - **增强**：
-    - 在 `task_repo` 加入 `unique(file_hash)` 约束，确保任务幂等性
-    - Worker 先查询任务状态，对于已完成的任务直接返回结果
-    - 在 `task` 表增加 `priority`、`retry_count` 字段
-    - 结合 Redis Stream 的 `XACK`+`XCLAIM` 实现任务限速和死信队列
+    - 在 `task_repo` 加入 `unique(file_hash)` 约束，确保任务幂等性 **(状态: 未实现)**
+    - Worker 先查询任务状态，对于已完成的任务直接返回结果 **(状态: 未实现)**
+    - 在 `task` 表增加 `priority`、`retry_count` 字段 **(状态: 未实现)**
+    - 结合 Redis Stream 的 `XACK`+`XCLAIM` 实现任务限速和死信队列 **(状态: 未实现)**
 
 ### 2.3 长对话记忆与摘要
 
 - **问题**：当前只存储原始消息，缺乏长对话的总结和权重管理
 - **方案**：
-  - 新增 `memory_service.go` 负责生成对话摘要
-  - 扩展数据库表，增加 `conversation_summary` 或相关字段
-  - 实现对话历史的选择性检索、权重衰减等策略
+  - 新增 `memory_service.go` 负责生成对话摘要 **(状态: 接口已定义，实现未完成)**
+  - 扩展数据库表，增加 `conversation_summary` 或相关字段 **(状态: 未实现)**
+  - 实现对话历史的选择性检索、权重衰减等策略 **(状态: 未实现)**
   - **增强**：
-    - 在 `memory_service` 中设计灵活接口：`Summarize(messages []Message) (summary string, err error)`
+    - 在 `memory_service` 中设计灵活接口：`Summarize(messages []Message) (summary string, err error)` **(状态: 接口已定义)**
     - 支持后期替换为不同的摘要算法（LLM、规则引擎或本地模型）
 
 ### 2.4 统一错误与日志处理
 
 - **问题**：缺乏结构化日志和统一错误处理
 - **方案**：
-  - 创建 `pkg/logger` 封装 slog 或 zap
-  - 实现 `pkg/apperr` 定义带错误码的应用错误
-  - 添加 Gin 中间件，统一捕获并转换错误为 HTTP 响应
+  - 创建 `pkg/logger` 封装 slog 或 zap **(状态: 已实现并使用)**
+  - 实现 `pkg/apperr` 定义带错误码的应用错误 **(状态: 已实现并使用)**
+  - 添加 Gin 中间件，统一捕获并转换错误为 HTTP 响应 **(状态: 未检查/实现)**
 
 ### 2.5 OpenAI 调用韧性增强
 
 - **问题**：OpenAI 调用没有熔断、限速、重试机制
 - **方案**：
-  - 在 `embedder_service.go` 中加入指数退避重试
-  - 集成速率限制器控制 API 请求频率
-  - 支持多 API Key 轮换配置
+  - 在 `embedder_service.go` 中加入指数退避重试 **(状态: 未实现)**
+  - 集成速率限制器控制 API 请求频率 **(状态: 未实现)**
+  - 支持多 API Key 轮换配置 **(状态: 未实现)**
+  - **备注**: 已修复 `openai_provider.go` 和 `embedding_provider.go` 中的编译错误和 `langchaingo` API 调用问题。流式处理暂用非流式替代。
 
 ### 2.6 数据一致性保障
 
@@ -440,7 +441,7 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, userID, c
    // ... 前期处理与现有 HandleChatMessage 类似 ...
    
    // 使用流式API调用
-   // TODO (2025-04-26): 当前 GenerateContentStream 的实现是临时的，
+   // 状态 (2025-04-26): 当前 GenerateContentStream 的实现是临时的，
    // 因为 langchaingo v0.1.13 中 openai.LLM 的流式选项 (llms.WithStreaming) 无效。
    // 需要进一步研究正确的流式 API (可能是独立的 Stream 方法或检查 GenerateContent 的响应)。
    // 暂时调用非流式方法。
