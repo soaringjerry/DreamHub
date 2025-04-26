@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: ankane/pgvector:pg16 # Use tag for latest pgvector compatible with PostgreSQL 16
+    image: ankane/pgvector:latest-pg16 # Try latest-pg16 tag
     restart: always
     environment:
       # 这些值会被服务器上 /root/dreamhub/.env 文件中的同名变量覆盖
