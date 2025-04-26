@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render } from '@testing-library/react'; // Removed unused 'screen' import
 import { describe, it, expect } from 'vitest';
 import App from './App'; // Assuming App component exists
 
