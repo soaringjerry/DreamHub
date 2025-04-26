@@ -44,6 +44,8 @@ func NewPGVectorRepository(db *postgres.DB) repository.VectorRepository {
 // AddChunks 使用循环和单条 INSERT 语句添加文档块及其向量。
 // user_id 和 document_id 被存储在 cmetadata 字段中。
 func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.DocumentChunk) error {
+	logger.InfoContext(ctx, ">>> Executing AddChunks with single INSERT logic <<<") // 添加日志标记
+	logger.InfoContext(ctx, ">>> Executing AddChunks with single INSERT logic <<<") // 添加日志标记
 	if len(chunks) == 0 {
 		return nil // 没有需要添加的块
 	}

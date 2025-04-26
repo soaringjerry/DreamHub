@@ -341,6 +341,7 @@ graph TD
 *   **错误处理与韧性:** 统一错误处理中间件已添加，但 Service 和 Repository 中的错误处理、重试、限流等机制尚不完善。
 *   **配置:** 部分参数（如文本分割器参数、历史消息数）仍为硬编码，需要移至配置。
 *   **测试:** 缺乏单元测试和集成测试。
+*   **向量插入问题 (服务器环境):** 在服务器环境部署时，使用 `pgx.CopyFrom` 批量插入向量到 `langchain_pg_embedding` 表时，即使数据库模式 (`vector(1536)`) 和向量维度 (1536) 均正确，仍可能遇到 `ERROR: vector cannot have more than 16000 dimensions` 的运行时错误。本地环境（相同版本）可能不会出现此问题。根本原因推测与服务器环境下 `pgx` 对 `vector` 类型的处理（尤其是在 `CopyFrom` 的二进制协议中，可能与类型注册失败有关）存在问题。**临时解决方案:** 已将 `internal/repository/pgvector/vector_repo_impl.go` 中的 `AddChunks` 函数修改为使用逐条 `INSERT` 语句，这解决了运行时错误，但可能会带来性能影响，尤其是在处理包含大量块的文档时。未来可考虑升级 `pgvector-go` 和 `pgx` 依赖，尝试恢复使用 `CopyFrom`。
 
 ## 后续开发计划
 
