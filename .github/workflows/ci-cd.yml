@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22' # Match your project's Go version
+          cache: false # Disable cache to potentially resolve tar error
 
       - name: Run Go Lint # Replace with your preferred linter, e.g., golangci-lint
         run: go vet ./... # Example, use golangci-lint run ./... if configured
@@ -44,6 +45,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: false # Disable cache to potentially resolve tar error
 
       - name: Run Go Tests
         run: go test -v ./... # Add coverage flags if needed, e.g., -coverprofile=coverage.out
