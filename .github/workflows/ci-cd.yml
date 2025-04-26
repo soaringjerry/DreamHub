@@ -166,8 +166,18 @@ jobs:
             # Example: sed -i 's|image: .*dreamhub.*|image: ghcr.io/${{ github.repository_owner }}/dreamhub:latest|g' docker-compose.yml
             docker pull ghcr.io/${{ github.repository_owner }}/dreamhub:latest
 
-            echo "Starting new container with docker compose..."
-            docker compose up -d --remove-orphans
+            echo "Starting containers with docker compose..."
+            # Check if DATABASE_URL is set in the .env file on the server
+            # Use grep -q to quietly search; exit code 0 if found, 1 if not
+            if grep -q '^DATABASE_URL=.*[^[:space:]]' .env; then
+              echo "DATABASE_URL found in .env, running without docker-db profile (using external DB)."
+              # Run compose without the postgres service profile
+              docker compose up -d --remove-orphans
+            else
+              echo "DATABASE_URL not found or empty in .env, running with docker-db profile (using containerized DB)."
+              # Run compose activating the postgres service profile
+              docker compose --profile docker-db up -d --remove-orphans
+            fi
             echo "Deployment complete!"
             # Optional: Prune old images
             # docker image prune -f

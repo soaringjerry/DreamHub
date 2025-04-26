@@ -2,19 +2,21 @@ version: '3.8'
 
 services:
   postgres:
+    profiles: ["docker-db"] # Only run this service when the 'docker-db' profile is activated
     image: ankane/pgvector:latest # Use the available 'latest' tag
     restart: always
     environment:
-      # 这些值会被服务器上 /root/dreamhub/.env 文件中的同名变量覆盖
+      # These values are used when the docker-db profile is active
+      # They should be defined in the server's .env file if DATABASE_URL is NOT set
       POSTGRES_DB: ${POSTGRES_DB:-dreamhub_db}
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # 这个挂载点需要你手动将 init_db.sql 放到服务器的 /root/dreamhub/ 目录下
+      # This mount requires init_db.sql to be present in /root/dreamhub on the server
       - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
-      - "5432:5432"
+      - "5433:5432" # Map host port 5433 to container port 5432
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-dreamhub_db}"]
       interval: 10s
@@ -38,9 +40,7 @@ services:
     # Using the specific image built and pushed by CI
     image: ghcr.io/soaringjerry/dreamhub:latest
     restart: always
-    depends_on:
-      postgres:
-        condition: service_healthy
+    depends_on: # Removed postgres dependency, app should handle connection based on DATABASE_URL
       redis:
         condition: service_healthy
     # 从服务器本地的 .env 文件加载环境变量
@@ -54,6 +54,6 @@ services:
       - uploads:/app/uploads
 
 volumes:
-  postgres_data:
+  postgres_data: # Keep volume definition even if service is profiled
   redis_data:
   uploads: # 如果定义了上面的 app volume，这里也要定义
