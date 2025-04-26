@@ -2,6 +2,7 @@ package service
 
 import (
 	"context" // Import fmt for error formatting
+	"fmt"     // Import fmt for string formatting
 	"strings" // Import strings for builder
 
 	"github.com/google/uuid"
@@ -15,7 +16,7 @@ import (
 type chatServiceImpl struct {
 	chatRepo    repository.ChatRepository // 对话历史仓库
 	llmProvider LLMProvider               // LLM 服务提供者
-	// ragService    RAGService                // RAG 服务 (未来添加)
+	ragService  RAGService                // RAG 服务
 	// memoryService MemoryService             // 对话记忆服务 (未来添加)
 	// maxHistory int // 最大历史消息数 (可以从配置读取)
 }
@@ -24,13 +25,13 @@ type chatServiceImpl struct {
 func NewChatService(
 	chatRepo repository.ChatRepository,
 	llm LLMProvider,
-	// rag RAGService,
+	rag RAGService, // 添加 RAG 服务依赖
 	// mem MemoryService,
 ) ChatService {
 	return &chatServiceImpl{
 		chatRepo:    chatRepo,
 		llmProvider: llm,
-		// ragService:    rag,
+		ragService:  rag, // 初始化 RAG 服务
 		// memoryService: mem,
 		// maxHistory: 10, // Example default
 	}
@@ -59,23 +60,45 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 		return "", newConversationID, err // SaveMessage 内部已包装错误
 	}
 
-	// 2. 获取对话历史 (和 RAG 上下文 - 未来)
-	// TODO: 结合 MemoryService 获取可能包含摘要的历史记录
-	// TODO: 结合 RAGService 获取相关文档块
+	// 2. 获取对话历史
 	const historyLimit = 10 // 获取最近 10 条消息作为上下文 (应可配置)
 	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, conversationID, historyLimit)
 	if err != nil {
-		// 获取历史失败，可以尝试无历史记录调用 LLM，或返回错误
-		logger.WarnContext(ctx, "获取对话历史失败，将无历史记录调用 LLM", "error", err, "conversation_id", conversationID)
-		// return "", newConversationID, err // 或者选择返回错误
+		logger.WarnContext(ctx, "获取对话历史失败，将继续执行", "error", err, "conversation_id", conversationID)
 		historyMessages = []*entity.Message{} // 使用空历史
 	}
 
-	// 准备 LLM 输入 (当前用户消息 + 历史消息)
-	llmInputMessages := append(historyMessages, userMessage) // 注意顺序
+	// 2.5 (RAG) 检索相关文档块
+	const ragLimit = 3 // 获取最多 3 个相关块 (应可配置)
+	var ragContextMessage *entity.Message
+	relevantChunks, ragErr := s.ragService.RetrieveRelevantChunks(ctx, message, ragLimit)
+	if ragErr != nil {
+		// RAG 检索失败，记录警告但继续
+		logger.WarnContext(ctx, "RAG 检索相关文档块失败", "error", ragErr, "conversation_id", conversationID)
+	} else if len(relevantChunks) > 0 {
+		// 构建 RAG 上下文消息
+		var contextBuilder strings.Builder
+		contextBuilder.WriteString("Relevant context:\n")
+		for i, chunk := range relevantChunks {
+			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID.String(), chunk.ID.String()))
+			// 可以在这里添加清理或截断 chunk.Content 的逻辑
+			contextBuilder.WriteString(chunk.Content)
+			contextBuilder.WriteString("\n")
+		}
+		ragContextMessage = entity.NewMessage(conversationID, userID, entity.SenderRoleSystem, contextBuilder.String())
+		logger.InfoContext(ctx, "成功检索 RAG 上下文", "chunk_count", len(relevantChunks), "conversation_id", conversationID)
+	}
+
+	// 准备 LLM 输入 (历史消息 + RAG 上下文 (如果存在) + 当前用户消息)
+	llmInputMessages := make([]*entity.Message, 0, len(historyMessages)+2)
+	llmInputMessages = append(llmInputMessages, historyMessages...)
+	if ragContextMessage != nil {
+		llmInputMessages = append(llmInputMessages, ragContextMessage) // 在用户消息前插入 RAG 上下文
+	}
+	llmInputMessages = append(llmInputMessages, userMessage)
 
 	// 3. 调用 LLM 生成回复
-	logger.InfoContext(ctx, "准备调用 LLM", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName) // Log model name
+	logger.InfoContext(ctx, "准备调用 LLM", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName, "with_rag", ragContextMessage != nil) // Log model name and RAG status
 	// 将 modelName 传递给 LLMProvider
 	aiReplyContent, err := s.llmProvider.GenerateContent(ctx, llmInputMessages, modelName)
 	if err != nil {
@@ -124,17 +147,42 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 		return newConversationID, err
 	}
 
-	// 2. 获取对话历史 (和 RAG 上下文 - 未来)
-	const historyLimit = 10
+	// 2. 获取对话历史
+	const historyLimit = 10 // (应可配置)
 	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, conversationID, historyLimit)
 	if err != nil {
-		logger.WarnContext(ctx, "获取对话历史失败 (流式)，将无历史记录调用 LLM", "error", err, "conversation_id", conversationID)
+		logger.WarnContext(ctx, "获取对话历史失败 (流式)，将继续执行", "error", err, "conversation_id", conversationID)
 		historyMessages = []*entity.Message{}
 	}
-	llmInputMessages := append(historyMessages, userMessage)
+
+	// 2.5 (RAG) 检索相关文档块
+	const ragLimitStream = 3 // (应可配置)
+	var ragContextMessageStream *entity.Message
+	relevantChunksStream, ragErrStream := s.ragService.RetrieveRelevantChunks(ctx, message, ragLimitStream)
+	if ragErrStream != nil {
+		logger.WarnContext(ctx, "RAG 检索相关文档块失败 (流式)", "error", ragErrStream, "conversation_id", conversationID)
+	} else if len(relevantChunksStream) > 0 {
+		var contextBuilder strings.Builder
+		contextBuilder.WriteString("Relevant context:\n")
+		for i, chunk := range relevantChunksStream {
+			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID.String(), chunk.ID.String()))
+			contextBuilder.WriteString(chunk.Content)
+			contextBuilder.WriteString("\n")
+		}
+		ragContextMessageStream = entity.NewMessage(conversationID, userID, entity.SenderRoleSystem, contextBuilder.String())
+		logger.InfoContext(ctx, "成功检索 RAG 上下文 (流式)", "chunk_count", len(relevantChunksStream), "conversation_id", conversationID)
+	}
+
+	// 准备 LLM 输入 (历史消息 + RAG 上下文 (如果存在) + 当前用户消息)
+	llmInputMessages := make([]*entity.Message, 0, len(historyMessages)+2)
+	llmInputMessages = append(llmInputMessages, historyMessages...)
+	if ragContextMessageStream != nil {
+		llmInputMessages = append(llmInputMessages, ragContextMessageStream)
+	}
+	llmInputMessages = append(llmInputMessages, userMessage)
 
 	// 3. 调用 LLM 流式生成回复
-	logger.InfoContext(ctx, "准备调用 LLM (流式)", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName) // Log model name
+	logger.InfoContext(ctx, "准备调用 LLM (流式)", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName, "with_rag", ragContextMessageStream != nil) // Log model name and RAG status
 
 	var fullReply strings.Builder // 用于拼接完整回复以保存
 	// 将 modelName 传递给 LLMProvider

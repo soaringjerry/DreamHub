@@ -103,10 +103,25 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 			return err // 返回错误，触发 defer 中的 Rollback
 		}
 
-		// 直接传递 pgvector.Vector 类型
-		_, errExec := tx.Exec(ctx, stmt.Name, chunk.Embedding, chunk.Content, metadataBytes)
+		// 更彻底地清理文本内容，移除所有非法的 UTF8 字符和 C0 控制字符 (除了换行和制表符)
+		cleanedContent := strings.Map(func(r rune) rune {
+			// 移除 NULL 字节和 C0 控制字符 (U+0000 to U+001F) 但保留 Tab(U+0009) 和 LF(U+000A)
+			if r == '\x00' || (r < ' ' && r != '\t' && r != '\n') {
+				return -1 // -1 表示移除该 rune
+			}
+			// 检查是否为有效的 UTF8 rune (虽然 Go 字符串通常是有效的，但以防万一)
+			// if !utf8.ValidRune(r) && r != utf8.RuneError {
+			// 	return -1
+			// }
+			return r // 保留其他字符
+		}, chunk.Content)
+
+		// 直接传递 pgvector.Vector 类型和清理后的文本
+		_, errExec := tx.Exec(ctx, stmt.Name, chunk.Embedding, cleanedContent, metadataBytes)
 		if errExec != nil {
 			logger.ErrorContext(ctx, "执行 INSERT 语句失败", "error", errExec, "chunk_id", chunk.ID)
+			// Log the problematic content for debugging (be careful with large content)
+			// logger.DebugContext(ctx, "Problematic chunk content (first 100 chars)", "content_prefix", cleanedContent[:min(100, len(cleanedContent))])
 			err = apperr.Wrap(errExec, apperr.CodeInternal, fmt.Sprintf("无法插入块 %s", chunk.ID))
 			return err // 返回错误，触发 defer 中的 Rollback
 		}

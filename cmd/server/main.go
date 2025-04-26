@@ -17,6 +17,7 @@ import (
 	"github.com/soaringjerry/dreamhub/internal/repository/pgvector"
 	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // Import Postgres implementations
 	"github.com/soaringjerry/dreamhub/internal/service"             // Import Service implementations
+	"github.com/soaringjerry/dreamhub/internal/service/embedding"   // Import Embedding provider implementation
 	"github.com/soaringjerry/dreamhub/internal/service/llm"         // Import LLM provider implementation
 	"github.com/soaringjerry/dreamhub/internal/service/queue"       // Import Queue client implementation
 	"github.com/soaringjerry/dreamhub/internal/service/storage"     // Import Storage implementation
@@ -64,6 +65,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize Embedding Provider
+	embeddingProvider, err := embedding.NewOpenAIEmbeddingProvider(cfg)
+	if err != nil {
+		logger.Error("Embedding Provider 初始化失败", "error", err)
+		os.Exit(1)
+	}
+
 	// Initialize Repositories
 	chatRepo := postgres.NewPostgresChatRepository(dbPool)
 	docRepo := postgres.NewPostgresDocumentRepository(dbPool)
@@ -71,8 +79,9 @@ func main() {
 	taskRepo := postgres.NewPostgresTaskRepository(dbPool)
 
 	// Initialize Services
-	// TODO: Initialize RAGService and MemoryService when available
-	chatService := service.NewChatService(chatRepo, llmProvider /*, ragService, memoryService */)
+	ragService := service.NewRAGService(vectorRepo, embeddingProvider) // Initialize RAGService
+	// TODO: Initialize MemoryService when available
+	chatService := service.NewChatService(chatRepo, llmProvider, ragService /*, memoryService */) // Inject RAGService
 	fileService := service.NewFileService(fileStorage, docRepo, taskRepo, taskQueueClient, vectorRepo)
 
 	// Initialize API Handlers
