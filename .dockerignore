@@ -1,0 +1,6 @@
+.git
+.vscode
+frontend/node_modules
+uploads/*
+*.md
+# Add other files/dirs to ignore

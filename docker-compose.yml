@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector:v0.7.0-pg16 # 使用具体的 pgvector 版本和 PG 版本
+    restart: always
+    environment:
+      # 这些值会被服务器上 /root/dreamhub/.env 文件中的同名变量覆盖
+      POSTGRES_DB: ${POSTGRES_DB:-dreamhub_db}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 这个挂载点需要你手动将 init_db.sql 放到服务器的 /root/dreamhub/ 目录下
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user} -d ${POSTGRES_DB:-dreamhub_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    # 这里使用我们 CI 构建并推送到 GHCR 的镜像
+    # GITHUB_REPOSITORY 会在 Actions 运行时自动替换为 "用户名/仓库名"
+    # 请将 your_github_username/your_repo_name 替换为你实际的值，或依赖 Actions 自动填充
+    image: ghcr.io/${GITHUB_REPOSITORY:-your_github_username/your_repo_name}:latest
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 从服务器本地的 .env 文件加载环境变量
+    env_file:
+      - .env
+    ports:
+      # 将主机的 8080 端口映射到容器的 8080 端口 (Dockerfile 中 EXPOSE 的端口)
+      - "8080:8080"
+    volumes:
+      # 如果应用需要持久化存储上传的文件
+      - uploads:/app/uploads
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads: # 如果定义了上面的 app volume，这里也要定义
