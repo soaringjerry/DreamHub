@@ -120,6 +120,15 @@ jobs:
     needs: build_and_push_image # Run deploy only after image is pushed
     environment: production # Optional: Define a GitHub environment for deployment secrets/rules
     steps:
+      - name: Verify files exist in workspace root
+        run: |
+          echo "Listing files in workspace root:"
+          ls -lah
+          echo "Checking specific files:"
+          test -f docker-compose.yml && echo "docker-compose.yml found" || echo "docker-compose.yml NOT FOUND"
+          test -f .env.example && echo ".env.example found" || echo ".env.example NOT FOUND"
+          test -f init_db.sql && echo "init_db.sql found" || echo "init_db.sql NOT FOUND"
+
       - name: Copy necessary files to server
         uses: appleboy/scp-action@v0.1.7
         with:
