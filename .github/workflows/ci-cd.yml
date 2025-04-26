@@ -120,45 +120,20 @@ jobs:
     needs: build_and_push_image # Run deploy only after image is pushed
     environment: production # Optional: Define a GitHub environment for deployment secrets/rules
     steps:
-      - name: Verify files exist in workspace root
+      - name: Install sshpass
+        run: sudo apt-get update && sudo apt-get install -y sshpass
+
+      - name: Copy files to server via sshpass scp
         run: |
-          echo "Listing files in workspace root:"
-          ls -lah
-          echo "Checking specific files:"
-          test -f docker-compose.yml && echo "docker-compose.yml found" || echo "docker-compose.yml NOT FOUND"
-          test -f .env.example && echo ".env.example found" || echo ".env.example NOT FOUND"
-          test -f init_db.sql && echo "init_db.sql found" || echo "init_db.sql NOT FOUND"
+          # Ensure target directory exists on server before copying
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p ${{ secrets.SSH_PORT || 22 }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "mkdir -p /root/dreamhub"
 
-      - name: Copy docker-compose.yml to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: "docker-compose.yml"
-          target: "/root/dreamhub/"
-          debug: true # Enable debug logging for this step
-
-      - name: Copy .env.example to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: ".env.example"
-          target: "/root/dreamhub/"
-
-      - name: Copy init_db.sql to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          port: ${{ secrets.SSH_PORT || 22 }}
-          source: "init_db.sql"
-          target: "/root/dreamhub/"
+          # Copy files using sshpass and scp
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./docker-compose.yml ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/docker-compose.yml
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./.env.example ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/.env.example
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT || 22 }} ./init_db.sql ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/root/dreamhub/init_db.sql
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }} # Make password available to the script
 
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.3
