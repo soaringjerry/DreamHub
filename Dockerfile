@@ -1,5 +1,6 @@
 # Stage 1: Build Go Backend (Server & Worker)
-FROM golang:1.22-alpine AS builder
+# Use a Go version that matches go.mod requirement (>= 1.23)
+FROM golang:1.23-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
