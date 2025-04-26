@@ -138,6 +138,7 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           source: "docker-compose.yml"
           target: "/root/dreamhub/"
+          debug: true # Enable debug logging for this step
 
       - name: Copy .env.example to server
         uses: appleboy/scp-action@v0.1.7
