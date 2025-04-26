@@ -28,7 +28,7 @@ func NewOpenAIProvider(cfg *config.Config) (service.LLMProvider, error) {
 		return nil, apperr.New(apperr.CodeInvalidArgument, "OpenAI API Key 未配置")
 	}
 	// TODO: 从配置中读取模型名称等参数
-	modelName := "o4-mini" // 或者 "gpt-4", "gpt-4o" 等
+	modelName := "gpt-4.1-2025-04-14" // 或者 "gpt-4", "gpt-4o" 等
 	// modelName := cfg.OpenAIModelName
 
 	// 使用 functional options 创建 OpenAI LLM 客户端

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/pgvector/pgvector-go"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
@@ -42,20 +41,51 @@ func NewPGVectorRepository(db *postgres.DB) repository.VectorRepository {
 	return &pgVectorRepository{db: db}
 }
 
-// AddChunks 使用 pgx.CopyFrom 批量添加文档块及其向量。
+// AddChunks 使用循环和单条 INSERT 语句添加文档块及其向量。
 // user_id 和 document_id 被存储在 cmetadata 字段中。
 func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.DocumentChunk) error {
 	if len(chunks) == 0 {
 		return nil // 没有需要添加的块
 	}
 
-	// 准备 CopyFrom 需要的数据源
-	// 每行包含: collection_id (可选, 如果 langchaingo 需要), embedding, document (可选), cmetadata
-	// 我们假设 collection_id 不是必需的，或者可以为 nil/default。
-	// 我们将 user_id, document_id, chunk_id 等关键信息存入 cmetadata。
-	// 我们假设 'document' 列存储块内容，如果不是，则需要将内容也存入 cmetadata。
-	rows := make([][]interface{}, len(chunks))
-	for i, chunk := range chunks {
+	// 使用事务确保原子性
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		logger.ErrorContext(ctx, "开始事务失败 (AddChunks)", "error", err)
+		return apperr.Wrap(err, apperr.CodeInternal, "无法开始数据库事务")
+	}
+	defer func() {
+		// 使用新的 context 以防原始 context 被取消
+		rollbackCtx := context.Background()
+		if p := recover(); p != nil {
+			_ = tx.Rollback(rollbackCtx)
+			panic(p)
+		} else if err != nil {
+			// 如果循环中出现错误，回滚事务
+			if rollbackErr := tx.Rollback(rollbackCtx); rollbackErr != nil {
+				logger.ErrorContext(rollbackCtx, "事务回滚失败 (AddChunks)", "rollback_error", rollbackErr, "original_error", err)
+			}
+		} else {
+			// 如果循环成功，提交事务
+			err = tx.Commit(ctx)
+			if err != nil {
+				logger.ErrorContext(ctx, "提交事务失败 (AddChunks)", "error", err)
+				err = apperr.Wrap(err, apperr.CodeInternal, "无法提交数据库事务") // 包装错误以便上层处理
+			}
+		}
+	}()
+
+	// 准备 INSERT 语句
+	// 假设表结构为 (embedding vector, document text, cmetadata jsonb)
+	sql := fmt.Sprintf("INSERT INTO %s (embedding, document, cmetadata) VALUES ($1, $2, $3)", tableName)
+	stmt, err := tx.Prepare(ctx, "insert_chunk", sql)
+	if err != nil {
+		logger.ErrorContext(ctx, "准备 INSERT 语句失败", "error", err)
+		return apperr.Wrap(err, apperr.CodeInternal, "无法准备插入语句")
+	}
+
+	insertedCount := 0
+	for _, chunk := range chunks {
 		// 确保元数据包含必要信息
 		if chunk.Metadata == nil {
 			chunk.Metadata = make(map[string]any)
@@ -63,49 +93,29 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 		chunk.Metadata[metadataUserIDKey] = chunk.UserID
 		chunk.Metadata[metadataDocumentIDKey] = chunk.DocumentID.String() // 存储为字符串
 		chunk.Metadata[metadataChunkIDKey] = chunk.ID.String()            // 存储块 ID
-		// chunk.Metadata[metadataContentKey] = chunk.Content // 如果 document 列不存在
-		// chunk.Metadata[metadataChunkIndexKey] = chunk.ChunkIndex
 
-		metadataBytes, err := json.Marshal(chunk.Metadata)
-		if err != nil {
-			logger.ErrorContext(ctx, "序列化块元数据失败", "error", err, "chunk_id", chunk.ID)
-			return apperr.Wrap(err, apperr.CodeInternal, fmt.Sprintf("无法序列化块 %s 的元数据", chunk.ID))
+		metadataBytes, errJson := json.Marshal(chunk.Metadata)
+		if errJson != nil {
+			logger.ErrorContext(ctx, "序列化块元数据失败", "error", errJson, "chunk_id", chunk.ID)
+			err = apperr.Wrap(errJson, apperr.CodeInternal, fmt.Sprintf("无法序列化块 %s 的元数据", chunk.ID))
+			return err // 返回错误，触发 defer 中的 Rollback
 		}
 
-		// 假设表结构为 (embedding vector, document text, cmetadata jsonb)
-		// 如果有 collection_id 列，需要调整
-		// 将 pgvector.Vector 转换为字符串表示形式，以绕过可能的 CopyFrom 类型处理问题
-		rows[i] = []interface{}{chunk.Embedding.String(), chunk.Content, metadataBytes}
+		// 直接传递 pgvector.Vector 类型
+		_, errExec := tx.Exec(ctx, stmt.Name, chunk.Embedding, chunk.Content, metadataBytes)
+		if errExec != nil {
+			logger.ErrorContext(ctx, "执行 INSERT 语句失败", "error", errExec, "chunk_id", chunk.ID)
+			err = apperr.Wrap(errExec, apperr.CodeInternal, fmt.Sprintf("无法插入块 %s", chunk.ID))
+			return err // 返回错误，触发 defer 中的 Rollback
+		}
+		insertedCount++
 	}
 
-	// 定义要复制的列名
-	// 调整这里的列名以匹配你的 langchain_pg_embedding 表结构
-	columnNames := []string{"embedding", "document", "cmetadata"}
-	// columnNames := []string{"collection_id", "embedding", "document", "cmetadata"} // 如果有 collection_id
-
-	// 执行批量插入
-	copyCount, err := r.db.Pool.CopyFrom(
-		ctx,
-		pgx.Identifier{tableName},
-		columnNames,
-		pgx.CopyFromRows(rows),
-	)
-
-	if err != nil {
-		logger.ErrorContext(ctx, "批量插入向量块失败", "error", err)
-		// 考虑错误类型，例如唯一约束冲突可能表示 CodeAlreadyExists
-		return apperr.Wrap(err, apperr.CodeInternal, "无法批量添加向量块")
+	// 如果没有错误，defer 中的 Commit 会被执行
+	if err == nil {
+		logger.InfoContext(ctx, "成功插入向量块 (逐条)", "count", insertedCount)
 	}
-
-	if int(copyCount) != len(chunks) {
-		logger.WarnContext(ctx, "批量插入向量块数量不匹配", "expected", len(chunks), "inserted", copyCount)
-		// 这可能表示部分插入成功，需要更复杂的错误处理或回滚逻辑
-		// 暂时返回一个通用错误
-		return apperr.New(apperr.CodeInternal, fmt.Sprintf("预期插入 %d 个块，但实际插入 %d 个", len(chunks), copyCount))
-	}
-
-	logger.InfoContext(ctx, "成功批量插入向量块", "count", copyCount)
-	return nil
+	return err // 返回 nil 或 Commit 错误
 }
 
 // SearchSimilarChunks 搜索与查询向量相似的文档块。
