@@ -69,13 +69,16 @@
     *   **`user_id`** (string, required): 用户标识符。**(临时方案)**
     *   **`message`** (string, required): 用户发送的消息。
     *   **`conversation_id`** (string, optional): 对话 ID (UUID 格式)。如果为空或未提供，则开始新对话。
+    *   **`model_name`** (string, optional): 指定要使用的 LLM 模型名称 (例如 "gpt-4", "gpt-3.5-turbo")。如果为空或未提供，则使用服务器配置的默认模型。
     ```json
-    // 开始新对话
+    // 开始新对话 (使用默认模型)
     { "user_id": "user_test_1", "message": "你好！" }
-    // 继续对话
+    // 继续对话 (使用默认模型)
     { "user_id": "user_test_1", "conversation_id": "zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz", "message": "上个问题再说详细点。" }
+    // 开始新对话 (指定模型)
+    { "user_id": "user_test_1", "message": "用 GPT-4 回答我", "model_name": "gpt-4" }
     ```
-*   **成功响应 (200 OK)**:
+   *   **成功响应 (200 OK)**:
     *   `Content-Type`: `application/json`
     *   **Body**:
         ```json

@@ -37,7 +37,7 @@ func NewChatService(
 }
 
 // HandleChatMessage 处理传入的聊天消息。
-func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string) (reply string, newConversationID uuid.UUID, err error) {
+func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string) (reply string, newConversationID uuid.UUID, err error) {
 	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
 	if err != nil {
 		return "", uuid.Nil, err
@@ -75,8 +75,9 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 	llmInputMessages := append(historyMessages, userMessage) // 注意顺序
 
 	// 3. 调用 LLM 生成回复
-	logger.InfoContext(ctx, "准备调用 LLM", "conversation_id", conversationID, "message_count", len(llmInputMessages))
-	aiReplyContent, err := s.llmProvider.GenerateContent(ctx, llmInputMessages)
+	logger.InfoContext(ctx, "准备调用 LLM", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName) // Log model name
+	// 将 modelName 传递给 LLMProvider
+	aiReplyContent, err := s.llmProvider.GenerateContent(ctx, llmInputMessages, modelName)
 	if err != nil {
 		// LLM 调用失败
 		return "", newConversationID, err // GenerateContent 内部已包装错误
@@ -100,7 +101,7 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 }
 
 // HandleStreamChatMessage 处理流式聊天消息。
-func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, streamCh chan<- string) (newConversationID uuid.UUID, err error) {
+func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string, streamCh chan<- string) (newConversationID uuid.UUID, err error) {
 	defer close(streamCh) // 确保 channel 在函数退出时关闭
 
 	userID, err := postgres.GetUserIDFromCtx(ctx)
@@ -133,10 +134,11 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 	llmInputMessages := append(historyMessages, userMessage)
 
 	// 3. 调用 LLM 流式生成回复
-	logger.InfoContext(ctx, "准备调用 LLM (流式)", "conversation_id", conversationID, "message_count", len(llmInputMessages))
+	logger.InfoContext(ctx, "准备调用 LLM (流式)", "conversation_id", conversationID, "message_count", len(llmInputMessages), "model_name", modelName) // Log model name
 
 	var fullReply strings.Builder // 用于拼接完整回复以保存
-	streamErr := s.llmProvider.GenerateContentStream(ctx, llmInputMessages, func(chunk string) {
+	// 将 modelName 传递给 LLMProvider
+	streamErr := s.llmProvider.GenerateContentStream(ctx, llmInputMessages, modelName, func(chunk string) {
 		// 将块发送到 channel
 		select {
 		case streamCh <- chunk:

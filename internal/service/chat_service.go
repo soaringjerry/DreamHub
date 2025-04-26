@@ -14,12 +14,14 @@ type ChatService interface {
 	// 它会检索上下文（历史记录，未来可能包括 RAG），调用 LLM，
 	// 保存用户消息和 AI 回复，并返回 AI 的回复和对话 ID。
 	// 需要从 ctx 中获取 user_id。
-	HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string) (reply string, newConversationID uuid.UUID, err error)
+	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
+	HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string) (reply string, newConversationID uuid.UUID, err error)
 
 	// HandleStreamChatMessage 处理流式聊天消息 (用于 WebSocket)。
 	// 实现逻辑与 HandleChatMessage 类似，但通过 channel 流式返回 AI 回复块。
 	// 需要从 ctx 中获取 user_id。
-	HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, streamCh chan<- string) (newConversationID uuid.UUID, err error)
+	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
+	HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string, streamCh chan<- string) (newConversationID uuid.UUID, err error)
 
 	// GetConversationMessages 获取指定对话的消息列表（带分页）。
 	// 需要从 ctx 中获取 user_id。
@@ -34,9 +36,11 @@ type ChatService interface {
 // 这允许我们将具体的 LLM 实现（如 OpenAI, Anthropic 等）解耦。
 type LLMProvider interface {
 	// GenerateContent 根据提供的消息历史生成回复。
-	GenerateContent(ctx context.Context, messages []*entity.Message) (string, error)
+	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
+	GenerateContent(ctx context.Context, messages []*entity.Message, modelName string) (string, error)
 	// GenerateContentStream 根据提供的消息历史流式生成回复。
-	GenerateContentStream(ctx context.Context, messages []*entity.Message, streamFn func(chunk string)) error
+	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
+	GenerateContentStream(ctx context.Context, messages []*entity.Message, modelName string, streamFn func(chunk string)) error
 }
 
 // EmbeddingProvider 定义了生成文本嵌入向量的接口。

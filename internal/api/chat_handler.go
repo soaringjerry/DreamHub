@@ -47,8 +47,9 @@ func (h *ChatHandler) RegisterRoutes(router *gin.RouterGroup) {
 // ChatRequest 定义了聊天请求的 JSON 结构体。
 type ChatRequest struct {
 	UserID         string `json:"user_id" binding:"required"` // 临时从请求体获取 user_id
-	ConversationID string `json:"conversation_id"`            // 可选，如果为空则开始新对话
+	ConversationID string `json:"conversation_id,omitempty"`  // 可选，如果为空则开始新对话
 	Message        string `json:"message" binding:"required"`
+	ModelName      string `json:"model_name,omitempty"` // 新增：可选的模型名称
 }
 
 // ChatResponse 定义了聊天响应的 JSON 结构体。
@@ -85,8 +86,8 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 		conversationID = uuid.Nil // 表示新对话
 	}
 
-	// 调用 ChatService 处理消息
-	reply, newConvID, err := h.chatService.HandleChatMessage(ctx, conversationID, req.Message)
+	// 调用 ChatService 处理消息，传入 ModelName
+	reply, newConvID, err := h.chatService.HandleChatMessage(ctx, conversationID, req.Message, req.ModelName)
 	if err != nil {
 		// HandleChatMessage 内部应该已经记录了日志并包装了错误
 		// 直接使用返回的 apperr

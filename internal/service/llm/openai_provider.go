@@ -55,18 +55,23 @@ func NewOpenAIProvider(cfg *config.Config) (service.LLMProvider, error) {
 }
 
 // GenerateContent 使用 OpenAI 生成回复。
-func (p *openAIProvider) GenerateContent(ctx context.Context, messages []*entity.Message) (string, error) {
+func (p *openAIProvider) GenerateContent(ctx context.Context, messages []*entity.Message, modelName string) (string, error) {
 	// 将 entity.Message 转换为 langchaingo 的 schema.ChatMessage
 	chatMessages := convertToLangchainMessages(messages)
 
+	// 确定要使用的模型名称
+	targetModel := p.modelName // 默认模型
+	if modelName != "" {
+		targetModel = modelName // 使用请求指定的模型
+	}
+
 	// 调用 langchaingo 的 GenerateContent 方法处理聊天消息
 	// TODO: 添加重试、限流等逻辑 (参考 DETAILED_PLAN.md 2.3)
-	// 移除无效的 llms.WithStreaming 选项
-	resp, err := p.client.GenerateContent(ctx, chatMessages)
-	// 可以添加其他选项: llms.WithTemperature(0.7), llms.WithModel(p.modelName) 等
+	resp, err := p.client.GenerateContent(ctx, chatMessages, llms.WithModel(targetModel))
+	// 可以添加其他选项: llms.WithTemperature(0.7) 等
 
 	if err != nil {
-		logger.ErrorContext(ctx, "调用 OpenAI API 失败", "error", err)
+		logger.ErrorContext(ctx, "调用 OpenAI API 失败", "error", err, "model", targetModel)
 		// 尝试解析 OpenAI 的具体错误类型 (如果 langchaingo 支持)
 		// 使用 pkg/apperr 中定义的错误类型
 		return "", apperr.Wrap(err, apperr.CodeUnavailable, "调用 LLM 服务失败") // Use CodeUnavailable for external service issues
@@ -82,20 +87,26 @@ func (p *openAIProvider) GenerateContent(ctx context.Context, messages []*entity
 }
 
 // GenerateContentStream 使用 OpenAI 流式生成回复。
-func (p *openAIProvider) GenerateContentStream(ctx context.Context, messages []*entity.Message, streamFn func(chunk string)) error {
+func (p *openAIProvider) GenerateContentStream(ctx context.Context, messages []*entity.Message, modelName string, streamFn func(chunk string)) error {
 	chatMessages := convertToLangchainMessages(messages)
+
+	// 确定要使用的模型名称
+	targetModel := p.modelName // 默认模型
+	if modelName != "" {
+		targetModel = modelName // 使用请求指定的模型
+	}
 
 	// 调用 langchaingo 的 GenerateContent 方法
 	// TODO: 正确实现流式处理。当前 langchaingo 的 openai.LLM 可能需要不同的方法
 	// 或选项来实现流式。暂时调用非流式方法并记录警告。
-	logger.WarnContext(ctx, "GenerateContentStream: 流式处理尚未完全实现，将使用非流式调用。")
+	logger.WarnContext(ctx, "GenerateContentStream: 流式处理尚未完全实现，将使用非流式调用。", "model", targetModel)
 
-	// 移除无效的流式选项
-	resp, err := p.client.GenerateContent(ctx, chatMessages)
-	// 可以添加其他选项: llms.WithTemperature(0.7), llms.WithModel(p.modelName) 等
+	// 调用非流式方法（临时）
+	resp, err := p.client.GenerateContent(ctx, chatMessages, llms.WithModel(targetModel))
+	// 可以添加其他选项: llms.WithTemperature(0.7) 等
 
 	if err != nil && !errors.Is(err, context.Canceled) { // 忽略由 context 取消引起的错误
-		logger.ErrorContext(ctx, "调用 OpenAI (非流式) API 失败", "error", err)
+		logger.ErrorContext(ctx, "调用 OpenAI (非流式) API 失败", "error", err, "model", targetModel)
 		// 使用 pkg/apperr 中定义的错误类型
 		return apperr.Wrap(err, apperr.CodeUnavailable, "调用 LLM 服务失败") // Use CodeUnavailable
 	}
