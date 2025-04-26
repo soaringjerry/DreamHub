@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings" // Import strings package for NoRoute check
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/static" // Import static file serving middleware
 	"github.com/gin-gonic/gin"
 	"github.com/soaringjerry/dreamhub/internal/api" // Import API handlers
 	"github.com/soaringjerry/dreamhub/internal/repository/pgvector"
@@ -92,7 +94,24 @@ func main() {
 	// authMiddleware := api.NewAuthMiddleware(...)
 	// apiV1.Use(authMiddleware.Authenticate())
 
-	// --- 3. Register Routes ---
+	// --- 3. Serve Static Frontend Files & Handle SPA Routing ---
+	staticFilesDir := "./frontend/dist" // Relative path inside the container where 'npm run build' outputs files
+	router.Use(static.Serve("/", static.LocalFile(staticFilesDir, true)))
+	router.NoRoute(func(c *gin.Context) {
+		// If the request is not for an API endpoint, serve the index.html for SPA routing
+		if !strings.HasPrefix(c.Request.URL.Path, "/api/") {
+			// Check if the file exists first to avoid serving index.html for missing assets?
+			// Or just serve index.html directly for any non-API route.
+			c.File(staticFilesDir + "/index.html")
+		} else {
+			// Let the default 404 handler take care of non-existent API routes
+			// Or return a specific API 404 JSON response
+			c.JSON(http.StatusNotFound, gin.H{"code": "API_ENDPOINT_NOT_FOUND", "message": "API endpoint not found"})
+		}
+	})
+	logger.Info("静态文件服务和 SPA 路由已配置。", "directory", staticFilesDir)
+
+	// --- 4. Register API Routes ---
 	// Health Check (outside API group, no auth needed)
 	router.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
