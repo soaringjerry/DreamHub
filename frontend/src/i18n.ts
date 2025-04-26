@@ -1,6 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import LanguageDetector from 'i18next-browser-languagedetector';
+// import LanguageDetector from 'i18next-browser-languagedetector'; // Removed unused import
 
 i18n
   // 将 i18n 实例传递给 react-i18next

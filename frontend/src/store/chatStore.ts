@@ -118,7 +118,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
 
       deleteConversation: (conversationId) => {
         set((state) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [conversationId]: _, ...remainingConversations } = state.conversations;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [conversationId]: __, ...remainingStatus } = state.conversationStatus;
           let newActiveId = state.activeConversationId;
           // 如果删除的是当前活动对话，则切换到第一个或 null

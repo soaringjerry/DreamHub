@@ -10,11 +10,13 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 // 定义代码组件类型
 interface CodeProps {
-  node?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  node?: any; // TODO: Define more specific type based on Markdown AST node
   inline?: boolean;
   className?: string;
   children?: React.ReactNode;
-  [key: string]: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any; // Allow other props passed by react-markdown
 }
 
 const MessageDisplay: React.FC = () => {
@@ -97,7 +99,8 @@ const MessageDisplay: React.FC = () => {
             {msg.sender === 'ai' && hasCodeBlock(msg.content) ? (
               <ReactMarkdown
                 components={{
-                  code({ node, inline, className, children, ...props }: CodeProps) {
+                  // Prefix 'node' with '_' to indicate it's intentionally unused
+                  code({ node: _node, inline, className, children, ...props }: CodeProps) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
                       <SyntaxHighlighter
@@ -115,7 +118,8 @@ const MessageDisplay: React.FC = () => {
                       </code>
                     );
                   },
-                  p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                  // Prefix 'node' with '_' to indicate it's intentionally unused
+                  p: ({node: _node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
                 }}
               >
                 {msg.content}

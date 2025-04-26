@@ -14,7 +14,7 @@ import { PlusSquare } from 'lucide-react'; // 导入新建图标
 const ChatInterface: React.FC = () => {
   const { t } = useTranslation();
   // --- 使用新的选择器和 action ---
-  const messages = useActiveMessages(); // 获取活动对话的消息
+  // const messages = useActiveMessages(); // 获取活动对话的消息 (暂时移除未使用的变量)
   const { isLoading, error } = useActiveConversationStatus(); // 获取活动对话的状态
   const startNewConversation = useChatStore((state) => state.startNewConversation); // 获取新建对话 action
 

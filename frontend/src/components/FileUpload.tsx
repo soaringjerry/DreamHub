@@ -76,7 +76,9 @@ const FileUpload: React.FC = () => {
           setSelectedFile(null);
           setUploadProgress(0);
         }, 3000);
-      } catch (error) {
+      } catch (error) { // eslint-disable-line @typescript-eslint/no-unused-vars
+        // TODO: Handle upload error (e.g., show notification to user)
+        console.error("Upload failed:", error); // Add basic error logging
         clearInterval(progressInterval);
         setUploadProgress(0);
       }
