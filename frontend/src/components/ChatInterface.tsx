@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 // 导入新的选择器和 action
 import {
   useChatStore,
-  useActiveMessages,
+  // useActiveMessages, // Removed unused import
   useActiveConversationStatus,
 } from '../store/chatStore';
 import MessageDisplay from './MessageDisplay';

@@ -99,8 +99,8 @@ const MessageDisplay: React.FC = () => {
             {msg.sender === 'ai' && hasCodeBlock(msg.content) ? (
               <ReactMarkdown
                 components={{
-                  // Prefix 'node' with '_' to indicate it's intentionally unused
-                  code({ node: _node, inline, className, children, ...props }: CodeProps) {
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  code({ node, inline, className, children, ...props }: CodeProps) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
                       <SyntaxHighlighter
@@ -118,8 +118,8 @@ const MessageDisplay: React.FC = () => {
                       </code>
                     );
                   },
-                  // Prefix 'node' with '_' to indicate it's intentionally unused
-                  p: ({node: _node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                  p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
                 }}
               >
                 {msg.content}
