@@ -25,8 +25,8 @@ type asynqClient struct {
 // NewAsynqClient 创建一个新的 Asynq 客户端实例。
 func NewAsynqClient(cfg *config.Config) service.TaskQueueClient {
 	redisOpt := asynq.RedisClientOpt{
-		Addr: cfg.RedisAddr,
-		// Password: cfg.RedisPassword,
+		Addr:     cfg.RedisAddr,
+		Password: cfg.RedisPassword, // Use the password from config
 		// DB:       cfg.RedisDB,
 	}
 	client := asynq.NewClient(redisOpt)
