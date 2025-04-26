@@ -159,6 +159,8 @@ jobs:
               echo "Using existing .env file found on server."
             fi
 
+            echo "Logging out from GHCR (just in case)..."
+            docker logout ghcr.io || true # Use || true to ignore errors if not logged in
             echo "Pulling latest image..."
             # Ensure docker-compose.yml image points to the correct GHCR path
             # Example: sed -i 's|image: .*dreamhub.*|image: ghcr.io/${{ github.repository_owner }}/dreamhub:latest|g' docker-compose.yml
