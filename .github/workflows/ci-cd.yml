@@ -167,16 +167,18 @@ jobs:
             docker pull ghcr.io/${{ github.repository_owner }}/dreamhub:latest
 
             echo "Starting containers with docker compose..."
-            # Check if DATABASE_URL is set in the .env file on the server
-            # Use grep -q to quietly search; exit code 0 if found, 1 if not
-            if grep -q '^DATABASE_URL=.*[^[:space:]]' .env; then
-              echo "DATABASE_URL found in .env, running without docker-db profile (using external DB)."
-              # Run compose without the postgres service profile
-              docker compose up -d --remove-orphans
-            else
-              echo "DATABASE_URL not found or empty in .env, running with docker-db profile (using containerized DB)."
+            # Check if POSTGRES_USER, POSTGRES_PASSWORD, AND POSTGRES_DB are all set and non-empty in the .env file
+            # Use grep -q to quietly search for non-empty values for each variable
+            if grep -q '^POSTGRES_USER=.*[^[:space:]]' .env && \
+               grep -q '^POSTGRES_PASSWORD=.*[^[:space:]]' .env && \
+               grep -q '^POSTGRES_DB=.*[^[:space:]]' .env; then
+              echo "POSTGRES_USER/PASSWORD/DB found in .env, running with docker-db profile (using containerized DB)."
               # Run compose activating the postgres service profile
               docker compose --profile docker-db up -d --remove-orphans
+            else
+              echo "POSTGRES_USER/PASSWORD/DB not all found or are empty in .env, running without docker-db profile (assuming external DB)."
+              # Run compose without the postgres service profile
+              docker compose up -d --remove-orphans
             fi
             echo "Deployment complete!"
             # Optional: Prune old images
