@@ -67,7 +67,8 @@ jobs:
         run: npm ci --prefix frontend
 
       - name: Run Frontend Tests (Vitest)
-        run: npm test -- --run --coverage --prefix frontend # Use --run for non-watch mode in CI
+        working-directory: ./frontend # Change working directory to frontend
+        run: npm test -- --run --coverage # Run test command directly
 
       # Optional: Upload Vitest coverage report
       # - name: Upload Vitest coverage to Codecov
