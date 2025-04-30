@@ -9,9 +9,12 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 *   **文件上传与异步处理:** API Server 接收上传的文件并保存（目前为本地存储），然后将处理任务（文本分块、向量化）放入 Asynq 任务队列 (Redis)。Worker 进程负责后台消费队列并处理这些任务。API Server 立即返回文档 ID 和任务 ID。
 *   **个人知识库 (RAG):** Worker 将处理后的文档块向量存入向量数据库 (PostgreSQL + pgvector)。Repository 层在查询时强制进行用户隔离过滤（基于 `cmetadata` 中的 `user_id`），支持基于用户文件内容的智能问答。
 *   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id` 和 `user_id`），存储在 PostgreSQL 中，通过 `ChatRepository` 进行管理，实现更连贯的 AI 交互。
-*   **基础 API:** 提供文件上传 (`/api/v1/upload`)、聊天交互 (`/api/v1/chat`)、文档管理 (`/api/v1/documents`) 和任务状态查询 (`/api/v1/tasks/{task_id}/status`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
+*   **基础 API:** 提供文件上传 (`/api/v1/upload`)、聊天交互 (`/api/v1/chat`)、文档管理 (`/api/v1/documents`) 和任务状态查询 (`/api/v1/tasks/{task_id}/status`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](Docs/API_DOCS.md)。
 *   **前端界面:** 提供了一个基于 React 的用户界面，用于文件上传、聊天交互和对话管理。详细前端文档请参考 [frontend/FRONTEND_DOCS.md](frontend/FRONTEND_DOCS.md)。
 
+## 文档说明
+
+本项目的所有详细文档，包括 API 文档、前端文档、开发计划、进度日志等，均已整理并移动到根目录下的 `Docs/` 文件夹中。请在该目录查找最新的详细信息。
 ## 系统架构
 
 ```mermaid
@@ -172,7 +175,7 @@ graph TD
 
 ## API 用法示例
 
-使用 `curl` 或 Postman 等工具与 API 交互。所有 API 路径均以 `/api/v1` 为前缀。完整 API 文档请参考 [API_DOCS.md](API_DOCS.md)。
+使用 `curl` 或 Postman 等工具与 API 交互。所有 API 路径均以 `/api/v1` 为前缀。完整 API 文档请参考 [API_DOCS.md](Docs/API_DOCS.md)。
 
 ### 1. 上传文件 (触发 Embedding)
 
@@ -345,4 +348,4 @@ graph TD
 
 ## 后续开发计划
 
-详细的开发计划、架构决策和检查清单请参考 [DETAILED_PLAN.md](DETAILED_PLAN.md) 文件。开发过程中的具体步骤和成果记录在 [PROGRESS_LOG.md](PROGRESS_LOG.md) 文件中。
+详细的开发计划、架构决策和检查清单请参考 [DETAILED_PLAN.md](Docs/DETAILED_PLAN.md) 文件。开发过程中的具体步骤和成果记录在 [PROGRESS_LOG.md](Docs/PROGRESS_LOG.md) 文件中。
