@@ -43,9 +43,12 @@ func (s *configServiceImpl) GetUserConfig(ctx context.Context, userID string) (*
 
 	// Prepare default DTO using global config
 	defaultDTO := &dto.UserConfigDTO{
-		ApiEndpoint: &s.globalConfig.OpenAIAPIKey, // Default API endpoint (Note: Using OpenAI key field for now, might need dedicated default field) - Let's assume global config has defaults
-		ModelName:   &s.globalConfig.OpenAIModel,  // Default Model Name
-		ApiKeyIsSet: false,                        // Default to false
+		// IMPORTANT SECURITY FIX: Do NOT expose the default API Key here.
+		// If a non-sensitive default endpoint exists in globalConfig, use that. Otherwise, use nil.
+		// Example: ApiEndpoint: &s.globalConfig.DefaultApiEndpoint (if such field exists and is safe)
+		ApiEndpoint: nil,                         // Set to nil to avoid leaking the default key
+		ModelName:   &s.globalConfig.OpenAIModel, // Default Model Name is safe
+		ApiKeyIsSet: false,                       // Correct: Default is false, only true if user explicitly sets one
 	}
 	// Adjust if global defaults are empty strings, make them nil pointers? Or handle in frontend?
 	// Let's assume empty string defaults are valid and frontend handles display.

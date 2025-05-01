@@ -160,7 +160,48 @@ apiClient.interceptors.request.use(
   }
 );
 
+// Response interceptor to handle errors, specifically 401 for logout
+apiClient.interceptors.response.use(
+  (response) => response, // Pass through successful responses
+  async (error: AxiosError) => {
+    const originalRequest = error.config; // Get the original request config
+
+    // Check if it's a 401 error and not a request to the login/register endpoint itself
+    if (error.response?.status === 401 && originalRequest && !originalRequest.url?.includes('/auth/')) {
+      console.error('API Error: 401 Unauthorized. Logging out.');
+      try {
+        // Dynamically import the store to avoid circular dependencies if api.ts is imported in store
+        const { useAuthStore } = await import('../store/authStore');
+        // Get the logout function outside of a component context
+        const logout = useAuthStore.getState().logout;
+        logout(); // Call the logout action
+
+        // Redirect to login page after logout
+        // Check if running in a browser environment before redirecting
+        if (typeof window !== 'undefined') {
+           window.location.href = '/login'; // Force reload to clear state
+        }
+
+        // Optionally, you might want to prevent the original error from propagating further
+        // by returning a resolved promise or a specific error object.
+        // However, rejecting might be desired to let the calling code know the request failed.
+        return Promise.reject(new Error('Session expired. Please log in again.'));
+
+      } catch (logoutError) {
+        console.error('Failed to execute logout action:', logoutError);
+        // Still reject the original error even if logout fails
+        return Promise.reject(error);
+      }
+    }
+
+    // For other errors, just reject the promise
+    return Promise.reject(error);
+  }
+);
+
+
 // --- Helper for Error Handling ---
+// This helper might still be useful for non-401 errors or if you want more specific messages
 const handleApiError = (error: unknown, defaultMessage: string): Error => {
   console.error('API Error:', error);
   if (axios.isAxiosError(error) && error.response) {

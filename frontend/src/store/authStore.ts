@@ -63,8 +63,8 @@ export const useAuthStore = create<AuthState & AuthActions>()(
         console.log('Logging out user:', get().user?.username);
         set({ ...initialState }); // Reset state to initial values
         // The persist middleware should handle clearing the token from localStorage
-        // based on the state reset. If not, uncomment below:
-        // localStorage.removeItem('auth-storage');
+        // based on the state reset, but we explicitly remove it for certainty.
+        localStorage.removeItem('auth-storage');
       },
 
       register: async (payload) => {
