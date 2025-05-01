@@ -248,19 +248,30 @@ export const useChatStore = create<ChatStore>()( // Use combined type
         console.log("Fetching conversations...");
         try {
           const conversationInfos: ConversationInfo[] = await getUserConversations();
+          console.log("API返回的对话列表:", conversationInfos);
+          console.log("API返回的对话列表类型:", typeof conversationInfos, Array.isArray(conversationInfos));
+          
           const newConversations: Record<string, Conversation> = {};
           const newConversationStatus: Record<string, { isLoading: boolean; error: string | null; hasLoadedMessages: boolean }> = {};
 
-          conversationInfos.forEach((info: ConversationInfo) => {
-            newConversations[info.id] = {
-              id: info.id,
-              title: info.title,
-              messages: [],
-              createdAt: info.created_at,
-              updatedAt: info.updated_at,
-            };
-            newConversationStatus[info.id] = { isLoading: false, error: null, hasLoadedMessages: false };
-          });
+          // 确保conversationInfos是数组
+          if (Array.isArray(conversationInfos)) {
+            conversationInfos.forEach((info: ConversationInfo) => {
+              newConversations[info.id] = {
+                id: info.id,
+                title: info.title,
+                messages: [],
+                createdAt: info.created_at,
+                updatedAt: info.updated_at,
+              };
+              newConversationStatus[info.id] = { isLoading: false, error: null, hasLoadedMessages: false };
+            });
+          } else {
+            console.error("API返回的对话列表不是数组:", conversationInfos);
+          }
+
+          console.log("转换后的conversations对象:", newConversations);
+          console.log("转换后的conversations类型:", typeof newConversations);
 
           set((state: ChatStore) => { // Use combined type
             let newActiveId = state.activeConversationId;
@@ -269,8 +280,14 @@ export const useChatStore = create<ChatStore>()( // Use combined type
               console.warn(`Active conversation ${newActiveId} not found after fetch. Resetting activeConversationId to null.`);
               newActiveId = null; // Reset to null
             }
+            
+            // 确保返回的conversations始终是一个对象
+            const updatedConversations = typeof newConversations === 'object' && newConversations !== null
+              ? newConversations
+              : {};
+              
             return {
-              conversations: newConversations,
+              conversations: updatedConversations,
               conversationStatus: { ...state.conversationStatus, ...newConversationStatus },
               isConversationListLoading: false,
               activeConversationId: newActiveId, // Update activeConversationId if needed
@@ -453,11 +470,36 @@ export const useActiveConversationId = () => useChatStore((state) => state.activ
 export const useActiveConversation = () => useChatStore((state: ChatStore) =>
   state.activeConversationId ? state.conversations[state.activeConversationId] : null
 );
-export const useActiveMessages = () => useChatStore((state: ChatStore) =>
-  state.activeConversationId
-    ? state.conversations[state.activeConversationId]?.messages ?? EMPTY_MESSAGES
-    : EMPTY_MESSAGES
-);
+export const useActiveMessages = () => useChatStore((state: ChatStore) => {
+  console.log("useActiveMessages - activeConversationId:", state.activeConversationId);
+  console.log("useActiveMessages - conversations:", state.conversations);
+  console.log("useActiveMessages - conversations type:", typeof state.conversations);
+  
+  // 防御性检查，确保conversations是一个对象
+  if (!state.conversations || typeof state.conversations !== 'object') {
+    console.error("conversations不是一个有效的对象:", state.conversations);
+    return EMPTY_MESSAGES;
+  }
+  
+  if (!state.activeConversationId) {
+    return EMPTY_MESSAGES;
+  }
+  
+  const activeConversation = state.conversations[state.activeConversationId];
+  console.log("useActiveMessages - activeConversation:", activeConversation);
+  
+  if (!activeConversation) {
+    console.warn(`找不到ID为${state.activeConversationId}的对话`);
+    return EMPTY_MESSAGES;
+  }
+  
+  if (!Array.isArray(activeConversation.messages)) {
+    console.error("对话的messages不是一个数组:", activeConversation.messages);
+    return EMPTY_MESSAGES;
+  }
+  
+  return activeConversation.messages;
+});
 export const useConversationStatus = (conversationId: string | null) => useChatStore((state: ChatStore) =>
   conversationId
     ? state.conversationStatus[conversationId] ?? DEFAULT_CONVERSATION_STATUS
@@ -470,11 +512,28 @@ export const useActiveConversationStatus = () => useChatStore((state: ChatStore)
 );
 export const useIsConversationListLoading = () => useChatStore((state) => state.isConversationListLoading);
 export const useConversationListError = () => useChatStore((state) => state.conversationListError);
-export const useSortedConversations = () => useChatStore((state: ChatStore) =>
-  Object.values(state.conversations).sort((a: Conversation, b: Conversation) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
-);
+export const useSortedConversations = () => useChatStore((state: ChatStore) => {
+  console.log("useSortedConversations - state.conversations:", state.conversations);
+  console.log("useSortedConversations - type:", typeof state.conversations);
+  
+  // 防御性检查，确保conversations是一个对象
+  if (!state.conversations || typeof state.conversations !== 'object') {
+    console.error("conversations不是一个有效的对象:", state.conversations);
+    return [];
+  }
+  
+  try {
+    const values = Object.values(state.conversations);
+    console.log("Object.values结果:", values);
+    
+    return values.sort((a: Conversation, b: Conversation) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  } catch (error) {
+    console.error("在useSortedConversations中处理conversations时出错:", error);
+    return [];
+  }
+});
 export const useIsUploading = () => useChatStore((state) => state.isUploading);
 export const useUploadError = () => useChatStore((state) => state.uploadError);
 export const useUploadedFiles = () => useChatStore((state) => state.uploadedFiles);

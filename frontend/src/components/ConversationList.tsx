@@ -16,11 +16,20 @@ const ConversationList: React.FC = () => {
   const isLoading = useIsConversationListLoading();
   const error = useConversationListError();
   const activeConversationId = useActiveConversationId();
+  // 获取原始conversations对象用于调试
+  const rawConversations = useChatStore((state) => state.conversations);
+  
   // Get actions
   const switchConversation = useChatStore((state) => state.switchConversation);
   const startNewConversation = useChatStore((state) => state.startNewConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const fetchConversations = useChatStore((state) => state.fetchConversations); // Get fetch action for retry
+  
+  // 添加调试日志
+  console.log("ConversationList - rawConversations:", rawConversations);
+  console.log("ConversationList - rawConversations type:", typeof rawConversations);
+  console.log("ConversationList - sortedConversations:", sortedConversations);
+  console.log("ConversationList - sortedConversations type:", typeof sortedConversations, Array.isArray(sortedConversations));
 
   const handleNewConversation = () => {
     startNewConversation();
@@ -67,36 +76,56 @@ const ConversationList: React.FC = () => {
               {t('retry', 'Retry')}
             </button>
           </div>
+        ) : !sortedConversations || !Array.isArray(sortedConversations) ? (
+          <div className="p-3 text-center text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/30 rounded border border-yellow-200 dark:border-yellow-700/50">
+            <AlertCircle className="h-4 w-4 inline-block mr-1 mb-0.5" />
+            <p className="text-xs font-medium mb-1">{t('invalidDataStructure', '数据结构无效')}</p>
+            <p className="text-xs mb-2">对话列表数据结构无效，请刷新页面重试</p>
+            <button
+              onClick={() => fetchConversations()} // 重试按钮
+              className="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-800/50 text-yellow-700 dark:text-yellow-300 rounded hover:bg-yellow-200 dark:hover:bg-yellow-700/50"
+            >
+              {t('retry', '重试')}
+            </button>
+          </div>
         ) : sortedConversations.length === 0 ? (
           <p className="pt-4 text-xs text-center text-gray-500 dark:text-gray-400">{t('noConversations', 'No conversations yet.')}</p>
         ) : (
           <ul className="space-y-1">
-            {sortedConversations.map((conv) => (
-              <li key={conv.id}>
-                <button
-                  onClick={() => switchConversation(conv.id)}
-                  className={`w-full flex items-center justify-between p-2 rounded-md text-sm text-left transition-colors duration-150 group ${
-                    activeConversationId === conv.id
-                      ? 'bg-primary-100 dark:bg-primary-800/50 text-primary-700 dark:text-primary-300 font-medium'
-                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  <span className="flex items-center space-x-2 truncate">
-                    <MessageSquare size={14} className="flex-shrink-0" />
-                    <span className="truncate" title={conv.title}>{conv.title}</span>
-                  </span>
-                  {/* Delete Button (appears on hover) */}
+            {sortedConversations.map((conv) => {
+              // 添加防御性检查，确保conv是有效的对象
+              if (!conv || typeof conv !== 'object' || !conv.id) {
+                console.error("无效的对话项:", conv);
+                return null;
+              }
+              
+              return (
+                <li key={conv.id}>
                   <button
-                    onClick={(e) => handleDelete(e, conv.id)}
-                    className="p-1 rounded text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400 focus:opacity-100 focus:text-red-500 transition-opacity duration-150"
-                    aria-label={t('deleteConversationLabel', 'Delete conversation')}
-                    title={t('deleteConversationLabel', 'Delete conversation')}
+                    onClick={() => switchConversation(conv.id)}
+                    className={`w-full flex items-center justify-between p-2 rounded-md text-sm text-left transition-colors duration-150 group ${
+                      activeConversationId === conv.id
+                        ? 'bg-primary-100 dark:bg-primary-800/50 text-primary-700 dark:text-primary-300 font-medium'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                   >
-                    <Trash2 size={14} />
+                    <span className="flex items-center space-x-2 truncate">
+                      <MessageSquare size={14} className="flex-shrink-0" />
+                      <span className="truncate" title={conv.title}>{conv.title}</span>
+                    </span>
+                    {/* Delete Button (appears on hover) */}
+                    <button
+                      onClick={(e) => handleDelete(e, conv.id)}
+                      className="p-1 rounded text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 hover:text-red-500 dark:hover:text-red-400 focus:opacity-100 focus:text-red-500 transition-opacity duration-150"
+                      aria-label={t('deleteConversationLabel', 'Delete conversation')}
+                      title={t('deleteConversationLabel', 'Delete conversation')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </button>
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
