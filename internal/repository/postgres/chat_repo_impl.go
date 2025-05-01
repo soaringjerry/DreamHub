@@ -45,11 +45,11 @@ func (r *postgresChatRepository) SaveMessage(ctx context.Context, message *entit
 // GetMessagesByConversationID 获取指定对话的所有消息，按时间戳升序排列。
 // 强制使用 ctx 中的 user_id 进行过滤。
 // conversationID is now string
-func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error) {
-	userID, err := GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return nil, err // GetUserIDFromCtx 已经包装了错误
-	}
+func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context, userID string, conversationID string, limit int, offset int) ([]*entity.Message, error) {
+	// userID is now passed as a parameter, remove GetUserIDFromCtx
+	// if err != nil { // Error handling for GetUserIDFromCtx removed
+	// 	return nil, err // GetUserIDFromCtx 已经包装了错误
+	// }
 
 	const sql = `
 		SELECT id, conversation_id, user_id, sender_role, message_content, timestamp, metadata
@@ -89,11 +89,11 @@ func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context
 // GetConversationHistory 获取指定对话的最近 N 条消息，按时间戳降序排列。
 // 强制使用 ctx 中的 user_id 进行过滤。
 // conversationID is now string
-func (r *postgresChatRepository) GetConversationHistory(ctx context.Context, conversationID string, lastN int) ([]*entity.Message, error) {
-	userID, err := GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return nil, err
-	}
+func (r *postgresChatRepository) GetConversationHistory(ctx context.Context, userID string, conversationID string, lastN int) ([]*entity.Message, error) {
+	// userID is now passed as a parameter, remove GetUserIDFromCtx
+	// if err != nil { // Error handling for GetUserIDFromCtx removed
+	// 	return nil, err
+	// }
 
 	// lastN <= 0 表示获取所有历史记录（或者可以设定一个合理的默认值/上限）
 	if lastN <= 0 {

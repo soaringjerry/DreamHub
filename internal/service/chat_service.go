@@ -12,25 +12,21 @@ type ChatService interface {
 	// 如果 conversationID 为零值 UUID，则表示开始新对话。
 	// 它会检索上下文（历史记录，未来可能包括 RAG），调用 LLM，
 	// 保存用户消息和 AI 回复，并返回 AI 的回复和对话 ID。
-	// 需要从 ctx 中获取 user_id。
 	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
 	// conversationID is now string
-	HandleChatMessage(ctx context.Context, conversationID string, message string, modelName string) (reply string, newConversationID string, err error)
+	HandleChatMessage(ctx context.Context, userID string, conversationID string, message string, modelName string) (reply string, newConversationID string, err error)
 
 	// HandleStreamChatMessage 处理流式聊天消息 (用于 WebSocket)。
 	// 实现逻辑与 HandleChatMessage 类似，但通过 channel 流式返回 AI 回复块。
-	// 需要从 ctx 中获取 user_id。
 	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
 	// conversationID is now string
-	HandleStreamChatMessage(ctx context.Context, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error)
+	HandleStreamChatMessage(ctx context.Context, userID string, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error)
 
 	// GetConversationMessages 获取指定对话的消息列表（带分页）。
-	// 需要从 ctx 中获取 user_id。
 	// conversationID is now string
-	GetConversationMessages(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error)
+	GetConversationMessages(ctx context.Context, userID string, conversationID string, limit int, offset int) ([]*entity.Message, error)
 
 	// GetUserConversations 获取指定用户的所有对话基本信息。
-	// 需要从 ctx 中获取 user_id。
 	GetUserConversations(ctx context.Context, userID string) ([]*entity.Conversation, error)
 
 	// TODO: 可能需要添加其他方法，例如：

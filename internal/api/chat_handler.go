@@ -94,7 +94,8 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 
 	// 调用 ChatService 处理消息，传入 ModelName
 	// Pass string conversationID directly
-	reply, newConvID, err := h.chatService.HandleChatMessage(ctx, conversationID, req.Message, req.ModelName)
+	// Pass userID explicitly
+	reply, newConvID, err := h.chatService.HandleChatMessage(ctx, userID, conversationID, req.Message, req.ModelName)
 	if err != nil {
 		// HandleChatMessage 内部应该已经记录了日志并包装了错误
 		// 直接使用返回的 apperr
@@ -165,7 +166,8 @@ func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 	// For now, assume the service layer handles context implicitly or doesn't need explicit userID for this call.
 
 	// Pass string conversationIDStr directly
-	messages, err := h.chatService.GetConversationMessages(ctx, conversationIDStr, limitInt, offsetInt) // Pass userID if needed: h.chatService.GetConversationMessages(ctx, userID, conversationIDStr, limitInt, offsetInt)
+	// Pass userID explicitly
+	messages, err := h.chatService.GetConversationMessages(ctx, userID, conversationIDStr, limitInt, offsetInt)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {

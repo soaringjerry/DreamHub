@@ -8,7 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
-	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // 需要访问 postgres.GetUserIDFromCtx
+
+	// "github.com/soaringjerry/dreamhub/internal/repository/postgres" // Removed unused import
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
 
@@ -38,12 +39,12 @@ func NewChatService(
 }
 
 // HandleChatMessage 处理传入的聊天消息。
-func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID string, message string, modelName string) (reply string, newConversationID string, err error) {
-	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		// Return empty string for newConversationID as it's now string
-		return "", "", err
-	}
+func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, userID string, conversationID string, message string, modelName string) (reply string, newConversationID string, err error) {
+	// userID is now passed as a parameter, remove GetUserIDFromCtx
+	// if err != nil { // Error handling for GetUserIDFromCtx removed
+	// 	// Return empty string for newConversationID as it's now string
+	// 	return "", "", err
+	// } // Removed the extra closing brace
 
 	isNewConversation := (conversationID == "") // Check for empty string for new conversation
 	if isNewConversation {
@@ -64,9 +65,10 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 
 	// 2. 获取对话历史
 	const historyLimit = 10 // 获取最近 10 条消息作为上下文 (应可配置)
-	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, conversationID, historyLimit)
+	// Pass userID to GetConversationHistory if it needs user-specific filtering (assuming it might)
+	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, userID, conversationID, historyLimit)
 	if err != nil {
-		logger.WarnContext(ctx, "获取对话历史失败，将继续执行", "error", err, "conversation_id", conversationID)
+		logger.WarnContext(ctx, "获取对话历史失败，将继续执行", "error", err, "user_id", userID, "conversation_id", conversationID)
 		historyMessages = []*entity.Message{} // 使用空历史
 	}
 
@@ -129,14 +131,14 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 }
 
 // HandleStreamChatMessage 处理流式聊天消息。
-func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error) {
+func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, userID string, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error) {
 	defer close(streamCh) // 确保 channel 在函数退出时关闭
 
-	userID, err := postgres.GetUserIDFromCtx(ctx)
-	if err != nil {
-		// Return empty string for newConversationID as it's now string
-		return "", err
-	}
+	// userID is now passed as a parameter, remove GetUserIDFromCtx
+	// if err != nil { // Error handling for GetUserIDFromCtx removed
+	// 	// Return empty string for newConversationID as it's now string
+	// 	return "", err
+	// } // Removed the extra closing brace
 
 	isNewConversation := (conversationID == "") // Check for empty string for new conversation
 	if isNewConversation {
@@ -156,9 +158,10 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 
 	// 2. 获取对话历史
 	const historyLimit = 10 // (应可配置)
-	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, conversationID, historyLimit)
+	// Pass userID to GetConversationHistory if it needs user-specific filtering (assuming it might)
+	historyMessages, err := s.chatRepo.GetConversationHistory(ctx, userID, conversationID, historyLimit)
 	if err != nil {
-		logger.WarnContext(ctx, "获取对话历史失败 (流式)，将继续执行", "error", err, "conversation_id", conversationID)
+		logger.WarnContext(ctx, "获取对话历史失败 (流式)，将继续执行", "error", err, "user_id", userID, "conversation_id", conversationID)
 		historyMessages = []*entity.Message{}
 	}
 
@@ -233,10 +236,10 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 }
 
 // GetConversationMessages 获取对话消息列表。
-func (s *chatServiceImpl) GetConversationMessages(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error) {
-	// GetMessagesByConversationID 内部会根据 ctx 中的 user_id 过滤
-	// Assuming chatRepo.GetMessagesByConversationID now accepts string conversationID
-	messages, err := s.chatRepo.GetMessagesByConversationID(ctx, conversationID, limit, offset)
+func (s *chatServiceImpl) GetConversationMessages(ctx context.Context, userID string, conversationID string, limit int, offset int) ([]*entity.Message, error) {
+	// Pass userID explicitly to the repository layer for filtering
+	// Assuming chatRepo.GetMessagesByConversationID now accepts string conversationID and userID
+	messages, err := s.chatRepo.GetMessagesByConversationID(ctx, userID, conversationID, limit, offset)
 	if err != nil {
 		// 内部已记录日志和包装错误
 		return nil, err
