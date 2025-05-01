@@ -464,6 +464,7 @@ export const useChatStore = create<ChatStore>()( // Use combined type
 
 const EMPTY_MESSAGES: Message[] = [];
 const DEFAULT_CONVERSATION_STATUS = { isLoading: false, error: null, hasLoadedMessages: false };
+const EMPTY_CONVERSATIONS: Conversation[] = []; // Stable empty array reference
 
 export const useUserId = () => useChatStore((state) => state.userId);
 export const useActiveConversationId = () => useChatStore((state) => state.activeConversationId);
@@ -512,27 +513,22 @@ export const useActiveConversationStatus = () => useChatStore((state: ChatStore)
 );
 export const useIsConversationListLoading = () => useChatStore((state) => state.isConversationListLoading);
 export const useConversationListError = () => useChatStore((state) => state.conversationListError);
+// Selector that returns a sorted array of conversations
 export const useSortedConversations = () => useChatStore((state: ChatStore) => {
-  console.log("useSortedConversations - state.conversations:", state.conversations);
-  console.log("useSortedConversations - type:", typeof state.conversations);
-  
-  // 防御性检查，确保conversations是一个对象
-  if (!state.conversations || typeof state.conversations !== 'object') {
-    console.error("conversations不是一个有效的对象:", state.conversations);
-    return [];
-  }
-  
-  try {
-    const values = Object.values(state.conversations);
-    console.log("Object.values结果:", values);
-    
-    return values.sort((a: Conversation, b: Conversation) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-    );
-  } catch (error) {
-    console.error("在useSortedConversations中处理conversations时出错:", error);
-    return [];
-  }
+    // console.log("useSortedConversations selector running");
+    if (!state.conversations || typeof state.conversations !== 'object') {
+      // console.error("useSortedConversations: conversations is not a valid object:", state.conversations);
+      return EMPTY_CONVERSATIONS; // Return stable reference
+    }
+    try {
+      const values = Object.values(state.conversations);
+      return values.sort((a: Conversation, b: Conversation) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    } catch (error) {
+      console.error("Error sorting conversations in useSortedConversations selector:", error);
+      return EMPTY_CONVERSATIONS; // Return stable reference
+    }
 });
 export const useIsUploading = () => useChatStore((state) => state.isUploading);
 export const useUploadError = () => useChatStore((state) => state.uploadError);

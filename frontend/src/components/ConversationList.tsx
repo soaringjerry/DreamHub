@@ -1,35 +1,48 @@
-import React from 'react';
+import React, { useMemo } from 'react'; // Import useMemo
 import { useTranslation } from 'react-i18next';
+// No longer need shallow here
 import {
   useChatStore,
+  Conversation, // Import Conversation type
   useActiveConversationId,
-  useSortedConversations, // Import the new selector
-  useIsConversationListLoading, // Import loading state selector
-  useConversationListError, // Import error state selector
+  useIsConversationListLoading,
+  useConversationListError,
 } from '../store/chatStore';
-import { MessageSquare, PlusSquare, Trash2, Loader2, AlertCircle } from 'lucide-react'; // Import icons
+import { MessageSquare, PlusSquare, Trash2, Loader2, AlertCircle } from 'lucide-react';
 
 const ConversationList: React.FC = () => {
   const { t } = useTranslation();
-  // Use the new selectors
-  const sortedConversations = useSortedConversations();
+  // Select the raw conversations object
+  const conversations = useChatStore((state) => state.conversations);
   const isLoading = useIsConversationListLoading();
   const error = useConversationListError();
   const activeConversationId = useActiveConversationId();
-  // 获取原始conversations对象用于调试
-  const rawConversations = useChatStore((state) => state.conversations);
-  
+  // Memoize the sorted list based on the raw conversations object
+  const sortedConversations = useMemo(() => {
+    // console.log("Recalculating sorted conversations"); // Add log for debugging memoization
+    if (!conversations || typeof conversations !== 'object') {
+      return []; // Return stable empty array reference
+    }
+    try {
+      const values = Object.values(conversations);
+      return values.sort((a: Conversation, b: Conversation) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    } catch (error) {
+      console.error("Error sorting conversations in useMemo:", error);
+      return []; // Return stable empty array reference
+    }
+  }, [conversations]); // Dependency: re-run only if conversations object reference changes
+
   // Get actions
   const switchConversation = useChatStore((state) => state.switchConversation);
   const startNewConversation = useChatStore((state) => state.startNewConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
   const fetchConversations = useChatStore((state) => state.fetchConversations); // Get fetch action for retry
   
-  // 添加调试日志
-  console.log("ConversationList - rawConversations:", rawConversations);
-  console.log("ConversationList - rawConversations type:", typeof rawConversations);
-  console.log("ConversationList - sortedConversations:", sortedConversations);
-  console.log("ConversationList - sortedConversations type:", typeof sortedConversations, Array.isArray(sortedConversations));
+  // Debugging logs (optional)
+  // console.log("ConversationList - conversations object:", conversations);
+  // console.log("ConversationList - memoized sortedConversations:", sortedConversations);
 
   const handleNewConversation = () => {
     startNewConversation();
