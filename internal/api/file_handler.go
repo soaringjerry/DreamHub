@@ -64,8 +64,8 @@ func (h *FileHandler) handleUploadFile(c *gin.Context) {
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		logger.WarnContext(ctx, "无法获取上传的文件", "error", err)
-		// Use ErrInvalidArgument helper (remove incorrect WithDetails)
-		appErr := apperr.ErrInvalidArgument("缺少文件或表单字段名错误 ('file')").Wrap(err)
+		// Use apperr.Wrap function instead of chaining from helper
+		appErr := apperr.Wrap(err, apperr.CodeInvalidArgument, "缺少文件或表单字段名错误 ('file')")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}

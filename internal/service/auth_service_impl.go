@@ -79,7 +79,8 @@ func (s *authServiceImpl) Register(ctx context.Context, payload RegisterPayload)
 		}
 		// Otherwise, return a generic internal error
 		logger.ErrorContext(ctx, "创建用户时仓库出错", "username", user.Username, "error", err)
-		return nil, apperr.New(apperr.CodeInternal, "注册失败，请稍后重试").Wrap(err)
+		// Use apperr.Wrap function instead of chaining
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "注册失败，请稍后重试")
 	}
 
 	logger.InfoContext(ctx, "用户注册成功", "user_id", user.ID, "username", user.Username)
@@ -99,7 +100,8 @@ func (s *authServiceImpl) Login(ctx context.Context, creds LoginCredentials) (*L
 		}
 		// Other repository errors
 		logger.ErrorContext(ctx, "登录时获取用户失败", "username", creds.Username, "error", err)
-		return nil, apperr.New(apperr.CodeInternal, "登录失败，请稍后重试").Wrap(err)
+		// Use apperr.Wrap function instead of chaining
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "登录失败，请稍后重试")
 	}
 
 	// Compare the provided password with the stored hash
@@ -112,7 +114,8 @@ func (s *authServiceImpl) Login(ctx context.Context, creds LoginCredentials) (*L
 		}
 		// Other potential errors during comparison
 		logger.ErrorContext(ctx, "密码比较失败", "username", creds.Username, "error", err)
-		return nil, apperr.New(apperr.CodeInternal, "登录失败，请稍后重试").Wrap(err)
+		// Use apperr.Wrap function instead of chaining
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "登录失败，请稍后重试")
 	}
 
 	// Password is correct, generate JWT
@@ -131,7 +134,8 @@ func (s *authServiceImpl) Login(ctx context.Context, creds LoginCredentials) (*L
 	tokenString, err := token.SignedString(s.jwtSecret)
 	if err != nil {
 		logger.ErrorContext(ctx, "JWT 签名失败", "username", creds.Username, "error", err)
-		return nil, apperr.New(apperr.CodeInternal, "登录失败，无法生成认证令牌").Wrap(err)
+		// Use apperr.Wrap function instead of chaining
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "登录失败，无法生成认证令牌")
 	}
 
 	logger.InfoContext(ctx, "用户登录成功", "user_id", user.ID, "username", user.Username)
@@ -164,7 +168,8 @@ func (s *authServiceImpl) ValidateToken(ctx context.Context, tokenString string)
 			return "", apperr.New(apperr.CodeUnauthenticated, "认证令牌尚未生效")
 		} else {
 			logger.WarnContext(ctx, "JWT 解析/验证失败", "error", err)
-			return "", apperr.New(apperr.CodeUnauthenticated, "无效的认证令牌").Wrap(err)
+			// Use apperr.Wrap function instead of chaining
+			return "", apperr.Wrap(err, apperr.CodeUnauthenticated, "无效的认证令牌")
 		}
 	}
 

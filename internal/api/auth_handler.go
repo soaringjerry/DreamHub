@@ -37,8 +37,8 @@ func (h *AuthHandler) register(c *gin.Context) {
 	// Bind JSON payload to the struct, handling potential binding errors
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		logger.WarnContext(c.Request.Context(), "注册请求绑定失败", "error", err)
-		// Use apperr for validation errors
-		appErr := apperr.New(apperr.CodeValidation, "无效的注册信息").Wrap(err)
+		// Use apperr.Wrap for validation errors
+		appErr := apperr.Wrap(err, apperr.CodeValidation, "无效的注册信息")
 		c.Error(appErr) // Pass error to the error handling middleware
 		return
 	}
@@ -62,7 +62,8 @@ func (h *AuthHandler) login(c *gin.Context) {
 	// Bind JSON payload
 	if err := c.ShouldBindJSON(&creds); err != nil {
 		logger.WarnContext(c.Request.Context(), "登录请求绑定失败", "error", err)
-		appErr := apperr.New(apperr.CodeValidation, "无效的登录凭证").Wrap(err)
+		// Use apperr.Wrap for validation errors
+		appErr := apperr.Wrap(err, apperr.CodeValidation, "无效的登录凭证")
 		c.Error(appErr)
 		return
 	}

@@ -62,9 +62,9 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 	var req ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.WarnContext(c.Request.Context(), "无效的聊天请求体", "error", err)
-		// 使用 apperr 包装错误并返回标准响应 (移除 WithDetails 或正确使用)
-		// 暂时移除 WithDetails
-		appErr := apperr.New(apperr.CodeInvalidArgument, "请求体无效").Wrap(err)
+		// 使用 apperr 包装错误并返回标准响应
+		// Use apperr.Wrap function instead of chaining
+		appErr := apperr.Wrap(err, apperr.CodeInvalidArgument, "请求体无效")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
