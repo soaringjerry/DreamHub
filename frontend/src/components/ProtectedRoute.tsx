@@ -2,11 +2,9 @@ import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useIsAuthenticated, useAuthToken } from '../store/authStore'; // Import auth state hook
 
-interface ProtectedRouteProps {
-  // You can add props here if needed, e.g., required roles/permissions
-}
+// Removed empty ProtectedRouteProps interface
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = () => {
+const ProtectedRoute: React.FC = () => { // Removed <ProtectedRouteProps>
   const isAuthenticated = useIsAuthenticated();
   const token = useAuthToken(); // Get token to check persistence
   const location = useLocation();

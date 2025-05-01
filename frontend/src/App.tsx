@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'; // Import Router components
 import i18n from './i18n';
-import { Moon, Sun, Languages, User, LogOut, Save } from 'lucide-react'; // Added LogOut
+import { Moon, Sun, Languages, User, LogOut } from 'lucide-react'; // Removed Save import
 import { useAuthStore, useIsAuthenticated, useCurrentUser } from './store/authStore'; // Import auth store hooks
 // Removed chatStore import for userId as it's handled by authStore now
 

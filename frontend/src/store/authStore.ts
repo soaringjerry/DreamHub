@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { loginUser as loginUserApi, LoginCredentials, LoginResponse, RegisterPayload, registerUser as registerUserApi, RegisterResponse, SanitizedUser } from '../services/api'; // Import API functions and types
+// Removed unused LoginResponse and RegisterResponse imports
+import { loginUser as loginUserApi, LoginCredentials, RegisterPayload, registerUser as registerUserApi, SanitizedUser } from '../services/api'; // Import API functions and types
 
 // --- State Interface ---
 interface AuthState {
