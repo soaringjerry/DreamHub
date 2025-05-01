@@ -262,11 +262,20 @@ export const useChatStore = create<ChatStore>()( // Use combined type
             newConversationStatus[info.id] = { isLoading: false, error: null, hasLoadedMessages: false };
           });
 
-          set((state: ChatStore) => ({ // Use combined type
-            conversations: newConversations,
-            conversationStatus: { ...state.conversationStatus, ...newConversationStatus },
-            isConversationListLoading: false,
-          }));
+          set((state: ChatStore) => { // Use combined type
+            let newActiveId = state.activeConversationId;
+            // Check if the current active ID is still valid in the newly fetched list
+            if (newActiveId && !newConversations[newActiveId]) {
+              console.warn(`Active conversation ${newActiveId} not found after fetch. Resetting activeConversationId to null.`);
+              newActiveId = null; // Reset to null
+            }
+            return {
+              conversations: newConversations,
+              conversationStatus: { ...state.conversationStatus, ...newConversationStatus },
+              isConversationListLoading: false,
+              activeConversationId: newActiveId, // Update activeConversationId if needed
+            };
+          });
           console.log(`Fetched and updated ${Object.keys(newConversations).length} conversations.`);
 
         } catch (error) {
