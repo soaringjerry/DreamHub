@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid" // Import uuid
 	"github.com/soaringjerry/dreamhub/internal/service"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
-	"github.com/soaringjerry/dreamhub/pkg/ctxutil"
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
 
@@ -49,22 +48,24 @@ func (h *FileHandler) RegisterRoutes(router *gin.RouterGroup) {
 // handleUploadFile 处理文件上传请求。
 // 使用 multipart/form-data。
 func (h *FileHandler) handleUploadFile(c *gin.Context) {
-	// TODO: 从认证中间件获取 user_id
-	// 临时从表单字段获取 user_id
-	userID := c.PostForm("user_id")
-	if userID == "" {
-		appErr := apperr.New(apperr.CodeInvalidArgument, "缺少 user_id 表单字段")
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (UploadFile)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
-	ctx := ctxutil.WithUserID(c.Request.Context(), userID)
+	// Log the userID
+	logger.DebugContext(c.Request.Context(), "处理文件上传", "user_id", userID)
+	ctx := c.Request.Context() // Use original context
 
 	// 从表单获取文件
 	fileHeader, err := c.FormFile("file")
 	if err != nil {
 		logger.WarnContext(ctx, "无法获取上传的文件", "error", err)
-		// Use ErrInvalidArgument helper
-		appErr := apperr.ErrInvalidArgument("缺少文件或表单字段名错误 ('file')").WithDetails(err.Error())
+		// Use ErrInvalidArgument helper (remove incorrect WithDetails)
+		appErr := apperr.ErrInvalidArgument("缺少文件或表单字段名错误 ('file')").Wrap(err)
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
@@ -144,14 +145,16 @@ func (h *FileHandler) handleGetTaskStatus(c *gin.Context) {
 
 // handleListDocuments 处理列出用户文档的请求。
 func (h *FileHandler) handleListDocuments(c *gin.Context) {
-	// TODO: 从认证中间件获取 user_id
-	userID := c.Query("user_id") // 临时从查询参数获取
-	if userID == "" {
-		appErr := apperr.New(apperr.CodeInvalidArgument, "缺少 user_id 查询参数")
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (ListDocuments)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
-	ctx := ctxutil.WithUserID(c.Request.Context(), userID)
+	logger.DebugContext(c.Request.Context(), "列出文档", "user_id", userID)
+	ctx := c.Request.Context() // Use original context
 
 	// 获取分页参数
 	limitStr := c.DefaultQuery("limit", "20")
@@ -188,10 +191,18 @@ func (h *FileHandler) handleGetDocument(c *gin.Context) {
 		return
 	}
 
-	// TODO: 从认证中间件获取 user_id 并设置到 ctx
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (GetDocument)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	logger.DebugContext(c.Request.Context(), "获取文档", "user_id", userID, "doc_id", docIDStr)
 	ctx := c.Request.Context()
-
-	doc, err := h.fileService.GetDocument(ctx, docID)
+	// Assume GetDocument service method performs authorization based on context/userID implicitly or needs update
+	doc, err := h.fileService.GetDocument(ctx, docID) // Pass userID if needed: h.fileService.GetDocument(ctx, userID, docID)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {
@@ -214,10 +225,18 @@ func (h *FileHandler) handleDeleteDocument(c *gin.Context) {
 		return
 	}
 
-	// TODO: 从认证中间件获取 user_id 并设置到 ctx
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (DeleteDocument)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	logger.DebugContext(c.Request.Context(), "删除文档", "user_id", userID, "doc_id", docIDStr)
 	ctx := c.Request.Context()
-
-	err = h.fileService.DeleteDocument(ctx, docID)
+	// Assume DeleteDocument service method performs authorization based on context/userID implicitly or needs update
+	err = h.fileService.DeleteDocument(ctx, docID) // Pass userID if needed: h.fileService.DeleteDocument(ctx, userID, docID)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {

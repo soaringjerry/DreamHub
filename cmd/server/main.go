@@ -77,16 +77,23 @@ func main() {
 	docRepo := postgres.NewPostgresDocumentRepository(dbPool)
 	vectorRepo := pgvector.NewPGVectorRepository(dbPool)
 	taskRepo := postgres.NewPostgresTaskRepository(dbPool)
+	// Access the underlying Pool from the custom DB type
+	userRepo := postgres.NewPostgresUserRepository(dbPool.Pool) // Initialize UserRepository
 
 	// Initialize Services
 	ragService := service.NewRAGService(vectorRepo, embeddingProvider) // Initialize RAGService
 	// TODO: Initialize MemoryService when available
 	chatService := service.NewChatService(chatRepo, llmProvider, ragService /*, memoryService */) // Inject RAGService
 	fileService := service.NewFileService(fileStorage, docRepo, taskRepo, taskQueueClient, vectorRepo)
+	authService := service.NewAuthService(userRepo, cfg) // Initialize AuthService
 
 	// Initialize API Handlers
 	chatHandler := api.NewChatHandler(chatService)
 	fileHandler := api.NewFileHandler(fileService)
+	authHandler := api.NewAuthHandler(authService) // Initialize AuthHandler
+
+	// Initialize Middleware
+	authMiddleware := api.NewAuthMiddleware(authService) // Initialize AuthMiddleware
 
 	logger.Info("所有依赖初始化完成。")
 
@@ -99,11 +106,9 @@ func main() {
 	router.Use(requestLoggerMiddleware()) // Log requests
 	router.Use(errorHandlerMiddleware())  // Handle application errors
 
-	// TODO: Add Authentication Middleware
-	// authMiddleware := api.NewAuthMiddleware(...)
-	// apiV1.Use(authMiddleware.Authenticate())
-
 	// --- 3. Serve Static Frontend Files & Handle SPA Routing ---
+	// IMPORTANT: Static file serving and SPA routing should generally happen *before* API routes
+	// if they share the same base path or could conflict.
 	staticFilesDir := "./frontend/dist" // Relative path inside the container where 'npm run build' outputs files
 	router.Use(static.Serve("/", static.LocalFile(staticFilesDir, true)))
 	router.NoRoute(func(c *gin.Context) {
@@ -129,14 +134,22 @@ func main() {
 	// API v1 Group
 	apiV1 := router.Group("/api/v1")
 	{
-		// Register routes from handlers
-		chatHandler.RegisterRoutes(apiV1)
-		fileHandler.RegisterRoutes(apiV1)
-		// Register other handlers here...
+		// Register public authentication routes (no auth middleware needed)
+		authHandler.RegisterRoutes(apiV1) // Registers /api/v1/auth/register and /api/v1/auth/login
+
+		// Group for routes requiring authentication
+		protectedRoutes := apiV1.Group("/")
+		protectedRoutes.Use(authMiddleware.Authenticate()) // Apply auth middleware to this group
+		{
+			// Register protected routes from handlers
+			chatHandler.RegisterRoutes(protectedRoutes) // Now uses the protected group
+			fileHandler.RegisterRoutes(protectedRoutes) // Now uses the protected group
+			// Register other protected handlers here...
+		}
 	}
 	logger.Info("API 路由注册完成。")
 
-	// --- 4. Start HTTP Server ---
+	// --- 5. Start HTTP Server ---
 	serverAddr := fmt.Sprintf(":%s", cfg.ServerPort)
 	srv := &http.Server{
 		Addr:    serverAddr,

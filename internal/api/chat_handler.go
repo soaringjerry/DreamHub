@@ -7,8 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/service"
-	"github.com/soaringjerry/dreamhub/pkg/apperr"  // 需要 apperr 来处理错误
-	"github.com/soaringjerry/dreamhub/pkg/ctxutil" // 需要 ctxutil 来设置 user_id
+	"github.com/soaringjerry/dreamhub/pkg/apperr" // 需要 apperr 来处理错误
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 	// "github.com/gorilla/websocket" // 后续实现 WebSocket 时需要
 )
@@ -46,8 +45,8 @@ func (h *ChatHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // ChatRequest 定义了聊天请求的 JSON 结构体。
 type ChatRequest struct {
-	UserID         string `json:"user_id" binding:"required"` // 临时从请求体获取 user_id
-	ConversationID string `json:"conversation_id,omitempty"`  // 可选，如果为空则开始新对话
+	// UserID is now obtained from the authentication context
+	ConversationID string `json:"conversation_id,omitempty"` // 可选，如果为空则开始新对话
 	Message        string `json:"message" binding:"required"`
 	ModelName      string `json:"model_name,omitempty"` // 新增：可选的模型名称
 }
@@ -63,14 +62,26 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 	var req ChatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.WarnContext(c.Request.Context(), "无效的聊天请求体", "error", err)
-		// 使用 apperr 包装错误并返回标准响应
-		appErr := apperr.New(apperr.CodeInvalidArgument, "请求体无效").WithDetails(err.Error())
+		// 使用 apperr 包装错误并返回标准响应 (移除 WithDetails 或正确使用)
+		// 暂时移除 WithDetails
+		appErr := apperr.New(apperr.CodeInvalidArgument, "请求体无效").Wrap(err)
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
 
-	// TODO: 从认证中间件获取 user_id，而不是从请求体
-	ctx := ctxutil.WithUserID(c.Request.Context(), req.UserID)
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		// This should ideally not happen if middleware is applied correctly
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (ChatHandler)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	// Log the userID to mark it as used (or pass it to service if needed)
+	logger.DebugContext(c.Request.Context(), "处理聊天请求", "user_id", userID)
+	// Use the original context, user ID is implicitly available via logger/service calls if needed
+	ctx := c.Request.Context()
 
 	var conversationID uuid.UUID
 	var err error
@@ -133,12 +144,22 @@ func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 		offsetInt = 0 // Use default if conversion fails or value is invalid
 	}
 
-	// TODO: 从认证中间件获取 user_id
-	// 暂时硬编码一个 user_id 用于测试，或者需要修改 GetConversationMessages 不强制 user_id
-	// ctx := ctxutil.WithUserID(c.Request.Context(), "temp_user_for_get_messages")
-	ctx := c.Request.Context() // 假设 user_id 已在中间件中设置
+	// Get UserID from the context set by the auth middleware
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (GetMessages)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	// Log the userID to mark it as used
+	logger.DebugContext(c.Request.Context(), "获取消息列表", "user_id", userID, "conversation_id", conversationIDStr)
+	// Use the original context
+	ctx := c.Request.Context()
+	// Note: We might need to pass userID explicitly to GetConversationMessages if it needs it for authorization/filtering
+	// For now, assume the service layer handles context implicitly or doesn't need explicit userID for this call.
 
-	messages, err := h.chatService.GetConversationMessages(ctx, conversationID, limitInt, offsetInt)
+	messages, err := h.chatService.GetConversationMessages(ctx, conversationID, limitInt, offsetInt) // Pass userID if needed: h.chatService.GetConversationMessages(ctx, userID, conversationID, limitInt, offsetInt)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {

@@ -4,6 +4,10 @@ FROM golang:1.23-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
+# Download migrate CLI tool
+RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+# Move migrate to a temporary location to avoid COPY issues later
+RUN mkdir -p /tmp/bin && mv /go/bin/migrate /tmp/bin/migrate
 COPY . .
 # Build server
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /server cmd/server/main.go
@@ -29,17 +33,23 @@ WORKDIR /app
 # Copy Go binaries from builder stage
 COPY --from=builder /server /app/server
 COPY --from=builder /worker /app/worker
+COPY --from=builder /tmp/bin/migrate /usr/local/bin/migrate # Copy migrate CLI, specifying destination filename
 # Copy frontend build from frontend-builder stage
-# Assuming the server serves frontend files from a 'public' or 'static' directory
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+# Copy migrations
+COPY migrations /app/migrations
 # Copy supervisor config
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # Copy .env.example for reference, but actual .env should be mounted or managed externally on the server
 # COPY .env.example .env.example
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose the port the server listens on (adjust if needed)
 EXPOSE 8080
 
-# Set the entrypoint to supervisor
-ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-# CMD is defined in supervisord.conf
+# Use an entrypoint script to run migrations first
+ENTRYPOINT ["/docker-entrypoint.sh"]
+# CMD will be executed by the entrypoint script (supervisord)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

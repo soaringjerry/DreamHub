@@ -1,86 +1,183 @@
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-// 后端 API 的基础 URL。由于我们配置了 Vite 代理，
-// 在开发环境中可以直接使用相对路径。
-// 在生产构建中，可能需要配置一个绝对 URL 或环境变量。
+// 后端 API 的基础 URL
 const API_BASE_URL = '/api/v1';
 
-// 定义上传 API 的响应类型 (根据 API_DOCS.md)
-interface UploadResponse {
-  message: string;    // e.g., "File upload accepted, processing in background."
-  filename: string;
-  task_id: string;    // ID for the background processing task
+// --- Interfaces based on backend definitions ---
+
+// User info safe to expose (matches entity.SanitizedUser)
+export interface SanitizedUser { // Add export keyword
+	id: string; // UUID as string
+	username: string;
+	created_at: string; // Assuming ISO string format from Go time.Time
+  updated_at: string;
 }
 
-// 定义聊天 API 的响应类型 (根据 API_DOCS.md)
+// Payload for registration (matches service.RegisterPayload)
+export interface RegisterPayload {
+  username: string;
+  password?: string; // Make password optional here if validation is done elsewhere, or required
+}
+
+// Payload for login (matches service.LoginCredentials)
+export interface LoginCredentials {
+  username: string;
+  password?: string; // Make password optional here if validation is done elsewhere, or required
+}
+
+// Response after successful login (matches service.LoginResponse)
+export interface LoginResponse {
+  token: string;
+  user: SanitizedUser;
+}
+
+// Response after successful registration (backend returns SanitizedUser)
+export type RegisterResponse = SanitizedUser;
+
+// Existing response types
+interface UploadResponse {
+  message: string;
+  filename: string;
+  doc_id: string; // Added based on backend handler response
+  task_id: string;
+}
+
 interface ChatResponse {
   conversation_id: string;
   reply: string;
 }
 
-/**
- * 上传文件到后端进行处理。
- * @param file 要上传的文件对象
- * @param userId 用户 ID
- * @returns Promise，包含上传结果
- */
-export const uploadFile = async (file: File, userId: string): Promise<UploadResponse> => {
-  if (!userId) {
-    throw new Error("User ID is required for file upload.");
-  }
-  const formData = new FormData();
-  formData.append('file', file); // 后端期望的字段名是 'file'
-  formData.append('user_id', userId); // 使用传入的 userId
+// --- Axios Instance and Interceptor ---
 
+// Create a dedicated Axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+// Request interceptor to add JWT token
+apiClient.interceptors.request.use(
+  (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
+    // Only add token to requests that are not for auth endpoints
+    if (config.url && !config.url.startsWith('/auth/')) {
+      const token = localStorage.getItem('authToken'); // Assuming token is stored in localStorage
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error: AxiosError): Promise<AxiosError> => {
+    // Handle request error
+    return Promise.reject(error);
+  }
+);
+
+// --- Helper for Error Handling ---
+const handleApiError = (error: unknown, defaultMessage: string): Error => {
+  console.error('API Error:', error);
+  if (axios.isAxiosError(error) && error.response) {
+    // Try to get error message from backend response structure { error: { message: '...' } }
+    const backendErrorMessage = error.response.data?.error?.message;
+    return new Error(`${defaultMessage}: ${backendErrorMessage || error.message}`);
+  }
+  return new Error(`${defaultMessage}: An unknown error occurred.`);
+};
+
+
+// --- API Functions ---
+
+/**
+ * Registers a new user.
+ * @param payload Registration data (username, password)
+ * @returns Promise containing the registered user's info (SanitizedUser)
+ */
+export const registerUser = async (payload: RegisterPayload): Promise<RegisterResponse> => {
   try {
-    const response = await axios.post<UploadResponse>(`${API_BASE_URL}/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data', // 必须设置正确的 Content-Type
-      },
-    });
+    const response = await apiClient.post<RegisterResponse>('/auth/register', payload);
     return response.data;
   } catch (error) {
-    console.error('Error uploading file:', error);
-    // 可以根据需要进行更具体的错误处理
-    if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`Upload failed: ${error.response.data?.message || error.message}`);
-    }
-    throw new Error('An unknown error occurred during file upload.');
+    throw handleApiError(error, 'Registration failed');
   }
 };
 
 /**
- * 发送聊天消息到后端。
- * @param message 用户发送的消息内容
- * @param conversationId 可选的当前对话 ID，用于继续对话
- * @param userId 用户 ID
- * @returns Promise，包含 AI 的回复和对话 ID
+ * Logs in a user.
+ * @param credentials Login data (username, password)
+ * @returns Promise containing the JWT and user info
  */
-export const sendMessage = async (message: string, conversationId?: string, userId?: string): Promise<ChatResponse> => {
-  if (!userId) {
-    throw new Error("User ID is required for sending messages.");
+export const loginUser = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  try {
+    const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
+    // Store token upon successful login (consider moving this logic to where loginUser is called, e.g., auth store/hook)
+    // localStorage.setItem('authToken', response.data.token);
+    return response.data;
+  } catch (error) {
+    // Clear token if login fails? Maybe not here.
+    // localStorage.removeItem('authToken');
+    throw handleApiError(error, 'Login failed');
   }
-  // Define payload type including user_id
-  const payload: { message: string; user_id: string; conversation_id?: string } = {
+};
+
+/**
+ * Uploads a file to the backend for processing.
+ * User ID is now handled by the backend via JWT.
+ * @param file The file object to upload
+ * @returns Promise containing the upload result
+ */
+export const uploadFile = async (file: File): Promise<UploadResponse> => {
+  const formData = new FormData();
+  formData.append('file', file); // Backend expects 'file' field
+
+  try {
+    // Use the configured apiClient which includes the auth header
+    const response = await apiClient.post<UploadResponse>('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Upload failed');
+  }
+};
+
+/**
+ * Sends a chat message to the backend.
+ * User ID is now handled by the backend via JWT.
+ * @param message The message content
+ * @param conversationId Optional conversation ID
+ * @returns Promise containing the AI reply and conversation ID
+ */
+export const sendMessage = async (message: string, conversationId?: string): Promise<ChatResponse> => {
+  // Payload no longer includes user_id
+  const payload: { message: string; conversation_id?: string } = {
     message,
-    user_id: userId, // 使用传入的 userId
   };
   if (conversationId) {
     payload.conversation_id = conversationId;
   }
 
   try {
-    const response = await axios.post<ChatResponse>(`${API_BASE_URL}/chat`, payload, {
+    // Use the configured apiClient which includes the auth header
+    const response = await apiClient.post<ChatResponse>('/chat', payload, {
       headers: {
         'Content-Type': 'application/json',
       },
     });
     return response.data;
   } catch (error) {
-    console.error('Error sending message:', error);
-    if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`Chat request failed: ${error.response.data?.message || error.message}`);
-    }
-    throw new Error('An unknown error occurred while sending the message.');
+    throw handleApiError(error, 'Chat request failed');
   }
 };
+
+// TODO: Add functions for other endpoints if needed (e.g., listDocuments, getTaskStatus)
+// Remember to use `apiClient` for these calls as well.
+// Example:
+// export const listDocuments = async (limit = 20, offset = 0): Promise<Document[]> => {
+//   try {
+//     const response = await apiClient.get<Document[]>('/documents', { params: { limit, offset } });
+//     return response.data;
+//   } catch (error) {
+//     throw handleApiError(error, 'Failed to fetch documents');
+//   }
+// };

@@ -21,11 +21,12 @@ const FileUpload: React.FC = () => {
 
   // --- Zustand Store Integration ---
   // 使用单独的选择器获取状态和 action
-  const uploadFile = useChatStore((state) => state.uploadFile);
+  const uploadFileAction = useChatStore((state) => state.uploadFile); // Renamed to avoid conflict
   const isUploading = useChatStore((state) => state.isUploading);
   const uploadError = useChatStore((state) => state.uploadError);
   const setUploadError = useChatStore((state) => state.setUploadError);
   const uploadedFiles = useChatStore((state) => state.uploadedFiles as UploadedFile[]); // 获取已上传文件列表
+  // Note: We no longer need userId from chatStore, authentication is handled globally
 
   // --- Helper Function ---
   // 改进的文件类型图标选择
@@ -67,7 +68,9 @@ const FileUpload: React.FC = () => {
       }, 400);
       
       try {
-        await uploadFile(selectedFile);
+        // Call the uploadFile action from the store.
+        // It no longer needs userId as api.ts handles auth.
+        await uploadFileAction(selectedFile);
         clearInterval(progressInterval);
         setUploadProgress(100); // 上传完成
         

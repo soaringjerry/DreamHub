@@ -157,6 +157,14 @@ jobs:
               exit 1 # Exit script because the required .env is missing
             else
               echo "Using existing .env file found on server."
+              # Check if JWT_SECRET is set in the .env file
+              if ! grep -q '^JWT_SECRET=.*[^[:space:]]' .env; then
+                echo "Error: JWT_SECRET is not set or is empty in the .env file on the server."
+                echo "Please set a strong JWT_SECRET in /root/dreamhub/.env for security."
+                exit 1 # Exit script because JWT_SECRET is missing
+              else
+                echo "JWT_SECRET found in .env file."
+              fi
             fi
 
             echo "Logging out from GHCR (just in case)..."

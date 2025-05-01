@@ -21,8 +21,11 @@ type Config struct {
 	UploadDir         string // 文件上传目录
 	LogLevel          string // 日志级别 (e.g., "debug", "info", "warn", "error")
 	WorkerConcurrency int    // Worker 并发数
+	// JWT 相关配置
+	JWTSecret            string // 用于签名 JWT 的密钥
+	JWTExpirationMinutes int    // JWT 过期时间（分钟）
 	// 可以根据需要添加更多配置项...
-	// 例如：JWTSecret, FrontendURL, VectorDBAddr 等
+	// 例如：FrontendURL, VectorDBAddr 等
 }
 
 var (
@@ -46,6 +49,13 @@ func LoadConfig() *Config {
 			workerConcurrency = 10
 		}
 
+		jwtExpirationMinutesStr := getEnv("JWT_EXPIRATION_MINUTES", "60") // 默认 60 分钟
+		jwtExpirationMinutes, err := strconv.Atoi(jwtExpirationMinutesStr)
+		if err != nil {
+			log.Printf("警告: 无效的 JWT_EXPIRATION_MINUTES 值 '%s'，将使用默认值 60。错误: %v", jwtExpirationMinutesStr, err)
+			jwtExpirationMinutes = 60
+		}
+
 		cfg = &Config{
 			ServerPort:    getEnv("SERVER_PORT", "8080"),          // 默认端口 8080
 			DatabaseURL:   getEnv("DATABASE_URL", ""),             // 没有默认值，必须提供
@@ -54,9 +64,11 @@ func LoadConfig() *Config {
 			OpenAIAPIKey:  getEnv("OPENAI_API_KEY", ""),           // 没有默认值，必须提供
 			OpenAIModel:   getEnv("OPENAI_MODEL", ""),             // 新增：加载聊天模型名称，默认为空
 			// OpenAIEmbeddingModel: getEnv("OPENAI_EMBEDDING_MODEL", ""), // TODO: Add if needed
-			UploadDir:         getEnv("UPLOAD_DIR", "./uploads"), // 默认上传目录
-			LogLevel:          getEnv("LOG_LEVEL", "info"),       // 默认日志级别 info
-			WorkerConcurrency: workerConcurrency,
+			UploadDir:            getEnv("UPLOAD_DIR", "./uploads"), // 默认上传目录
+			LogLevel:             getEnv("LOG_LEVEL", "info"),       // 默认日志级别 info
+			WorkerConcurrency:    workerConcurrency,
+			JWTSecret:            getEnv("JWT_SECRET", ""), // 没有默认值，必须提供
+			JWTExpirationMinutes: jwtExpirationMinutes,
 		}
 
 		// 可以在这里添加对必要配置项的检查
@@ -65,6 +77,12 @@ func LoadConfig() *Config {
 		}
 		if cfg.OpenAIAPIKey == "" {
 			log.Fatal("错误: 环境变量 OPENAI_API_KEY 未设置。")
+		}
+		if cfg.JWTSecret == "" {
+			// 在生产环境中，JWT 密钥是必需的
+			log.Println("警告: 环境变量 JWT_SECRET 未设置。在生产环境中，请务必设置一个强密钥。")
+			// 可以选择在这里 Fatal 退出，或者在 auth service 中使用默认值（如已实现）
+			// log.Fatal("错误: 环境变量 JWT_SECRET 未设置。")
 		}
 	})
 	return cfg
