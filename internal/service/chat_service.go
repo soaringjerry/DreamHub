@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 )
 
@@ -15,17 +14,20 @@ type ChatService interface {
 	// 保存用户消息和 AI 回复，并返回 AI 的回复和对话 ID。
 	// 需要从 ctx 中获取 user_id。
 	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
-	HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string) (reply string, newConversationID uuid.UUID, err error)
+	// conversationID is now string
+	HandleChatMessage(ctx context.Context, conversationID string, message string, modelName string) (reply string, newConversationID string, err error)
 
 	// HandleStreamChatMessage 处理流式聊天消息 (用于 WebSocket)。
 	// 实现逻辑与 HandleChatMessage 类似，但通过 channel 流式返回 AI 回复块。
 	// 需要从 ctx 中获取 user_id。
 	// modelName 参数用于指定要使用的 LLM 模型，如果为空则使用默认模型。
-	HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string, streamCh chan<- string) (newConversationID uuid.UUID, err error)
+	// conversationID is now string
+	HandleStreamChatMessage(ctx context.Context, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error)
 
 	// GetConversationMessages 获取指定对话的消息列表（带分页）。
 	// 需要从 ctx 中获取 user_id。
-	GetConversationMessages(ctx context.Context, conversationID uuid.UUID, limit int, offset int) ([]*entity.Message, error)
+	// conversationID is now string
+	GetConversationMessages(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error)
 
 	// GetUserConversations 获取指定用户的所有对话基本信息。
 	// 需要从 ctx 中获取 user_id。
@@ -56,11 +58,13 @@ type EmbeddingProvider interface {
 
 // RAGService 定义了执行 RAG 检索的接口 (暂时定义，后续实现)。
 type RAGService interface {
-	RetrieveRelevantChunks(ctx context.Context, query string, limit int) ([]*entity.DocumentChunk, error)
+	RetrieveRelevantChunks(ctx context.Context, userID string, query string, limit int) ([]*entity.DocumentChunk, error)
 }
 
 // MemoryService 定义了管理对话记忆和摘要的接口 (暂时定义，后续实现)。
 type MemoryService interface {
-	GetSummarizedHistory(ctx context.Context, conversationID uuid.UUID, currentMessages []*entity.Message) ([]*entity.Message, error)
-	SummarizeAndSave(ctx context.Context, conversationID uuid.UUID, messages []*entity.Message) error
+	// conversationID is now string
+	GetSummarizedHistory(ctx context.Context, conversationID string, currentMessages []*entity.Message) ([]*entity.Message, error)
+	// conversationID is now string
+	SummarizeAndSave(ctx context.Context, conversationID string, messages []*entity.Message) error
 }

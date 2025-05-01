@@ -2,15 +2,14 @@ package entity
 
 import (
 	"time"
-
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 )
 
 // StructuredMemory represents a single piece of structured information
 // stored for a specific user.
 type StructuredMemory struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"`
-	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"` // Foreign key to users table
+	ID        string    `json:"id" gorm:"type:uuid;primary_key;default:uuid_generate_v4()"` // Keep ID as UUID string for consistency? Or uint? Let's use string UUID.
+	UserID    string    `json:"user_id" gorm:"type:uuid;not null;index"`                    // Foreign key to users table (string UUID)
 	Key       string    `json:"key" gorm:"type:varchar(255);not null;index"`
 	Value     string    `json:"value" gorm:"type:text;not null"` // Use TEXT for flexibility
 	CreatedAt time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`

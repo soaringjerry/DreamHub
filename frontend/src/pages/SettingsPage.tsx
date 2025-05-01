@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom'; // Import Link
 import { getUserConfig, updateUserConfig, UpdateUserConfigRequest } from '../services/api';
 
 const SettingsPage: React.FC = () => {
@@ -75,8 +76,19 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-lg mx-auto bg-white rounded-lg shadow-md">
-      <h1 className="text-2xl font-semibold mb-6 text-gray-800">{t('settings.title')}</h1>
+    <div className="p-6 max-w-lg mx-auto bg-white rounded-lg shadow-md relative"> {/* Added relative positioning */}
+      {/* Back Button */}
+      <Link
+        to="/"
+        className="absolute top-4 left-4 text-gray-600 hover:text-gray-900 transition-colors duration-200"
+        aria-label={t('common.backToChat') || 'Back to Chat'} // Add aria-label for accessibility
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      </Link>
+
+      <h1 className="text-2xl font-semibold mb-6 text-gray-800 text-center">{t('settings.title')}</h1> {/* Centered title */}
 
       {isLoading && <p className="text-blue-600 mb-4">{t('settings.loadingConfig')}</p>}
 

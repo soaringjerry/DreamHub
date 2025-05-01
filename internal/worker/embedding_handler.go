@@ -131,7 +131,7 @@ func (h *EmbeddingTaskHandler) ProcessTask(ctx context.Context, t *asynq.Task) e
 
 		// Create DocumentChunk
 		entityChunks[i] = entity.NewDocumentChunk( // Assign to the correct slice
-			documentID,
+			documentID.String(), // Convert UUID to string
 			payload.UserID,
 			i, // chunk index
 			doc.PageContent,

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
 )
@@ -21,7 +21,8 @@ func NewStructuredMemoryService(repo repository.StructuredMemoryRepository) Stru
 }
 
 // CreateMemory creates a new structured memory entry.
-func (s *structuredMemoryServiceImpl) CreateMemory(ctx context.Context, userID uuid.UUID, key, value string) (*entity.StructuredMemory, error) {
+// Changed userID type from uuid.UUID to string (UUID)
+func (s *structuredMemoryServiceImpl) CreateMemory(ctx context.Context, userID string, key, value string) (*entity.StructuredMemory, error) {
 	// Basic validation
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -48,28 +49,32 @@ func (s *structuredMemoryServiceImpl) CreateMemory(ctx context.Context, userID u
 }
 
 // GetMemoryByKey retrieves a specific memory entry by key.
-func (s *structuredMemoryServiceImpl) GetMemoryByKey(ctx context.Context, userID uuid.UUID, key string) (*entity.StructuredMemory, error) {
+// Changed userID type from uuid.UUID to string (UUID)
+func (s *structuredMemoryServiceImpl) GetMemoryByKey(ctx context.Context, userID string, key string) (*entity.StructuredMemory, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
-		return nil, errors.New("memory key cannot be empty")
+		return nil, errors.New("memory key cannot be empty") // TODO: Use apperr
 	}
 	// The repository handles ErrNotFound mapping
 	return s.repo.GetByKey(ctx, userID, key)
 }
 
 // GetUserMemories retrieves all memory entries for a user.
-func (s *structuredMemoryServiceImpl) GetUserMemories(ctx context.Context, userID uuid.UUID) ([]*entity.StructuredMemory, error) {
+// Changed userID type from uuid.UUID to string (UUID)
+func (s *structuredMemoryServiceImpl) GetUserMemories(ctx context.Context, userID string) ([]*entity.StructuredMemory, error) {
+	// Pass string userID to repository
 	return s.repo.GetByUserID(ctx, userID)
 }
 
 // UpdateMemory updates an existing memory entry.
-func (s *structuredMemoryServiceImpl) UpdateMemory(ctx context.Context, userID uuid.UUID, key, value string) (*entity.StructuredMemory, error) {
+// Changed userID type from uuid.UUID to string (UUID)
+func (s *structuredMemoryServiceImpl) UpdateMemory(ctx context.Context, userID string, key, value string) (*entity.StructuredMemory, error) {
 	key = strings.TrimSpace(key)
 	if key == "" {
-		return nil, errors.New("memory key cannot be empty")
+		return nil, errors.New("memory key cannot be empty") // TODO: Use apperr
 	}
 	if strings.TrimSpace(value) == "" {
-		return nil, errors.New("memory value cannot be empty")
+		return nil, errors.New("memory value cannot be empty") // TODO: Use apperr
 	}
 
 	// First, check if the memory exists (optional, repo update also checks)
@@ -104,11 +109,13 @@ func (s *structuredMemoryServiceImpl) UpdateMemory(ctx context.Context, userID u
 }
 
 // DeleteMemory deletes a memory entry by key.
-func (s *structuredMemoryServiceImpl) DeleteMemory(ctx context.Context, userID uuid.UUID, key string) error {
+// Changed userID type from uuid.UUID to string (UUID)
+func (s *structuredMemoryServiceImpl) DeleteMemory(ctx context.Context, userID string, key string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
-		return errors.New("memory key cannot be empty")
+		return errors.New("memory key cannot be empty") // TODO: Use apperr
 	}
 	// Repository handles ErrNotFound if the key doesn't exist
+	// Pass string userID to repository
 	return s.repo.Delete(ctx, userID, key)
 }

@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 )
 
@@ -15,16 +14,20 @@ type TaskRepository interface {
 
 	// GetTaskByID 根据 ID 获取任务信息。
 	// 需要确保实现中根据 ctx 中的 user_id 进行了过滤 (如果需要按用户隔离任务视图)。
-	GetTaskByID(ctx context.Context, taskID uuid.UUID) (*entity.Task, error)
+	// taskID is now string
+	GetTaskByID(ctx context.Context, taskID string) (*entity.Task, error)
 
 	// UpdateTaskStatus 更新任务的状态、进度和错误信息。
-	UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, status entity.TaskStatus, progress float64, errMsg string) error
+	// taskID is now string
+	UpdateTaskStatus(ctx context.Context, taskID string, status entity.TaskStatus, progress float64, errMsg string) error
 
 	// UpdateTaskResult 更新任务成功时的结果。
-	UpdateTaskResult(ctx context.Context, taskID uuid.UUID, result map[string]interface{}) error
+	// taskID is now string
+	UpdateTaskResult(ctx context.Context, taskID string, result map[string]interface{}) error
 
 	// IncrementRetryCount 增加任务的重试次数。
-	IncrementRetryCount(ctx context.Context, taskID uuid.UUID) error
+	// taskID is now string
+	IncrementRetryCount(ctx context.Context, taskID string) error
 
 	// GetPendingTasks 获取处于 Pending 状态的任务 (可能用于 Worker 恢复或检查)。
 	// 可以添加过滤条件，例如按创建时间、优先级等。

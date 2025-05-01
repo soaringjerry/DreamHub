@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/soaringjerry/dreamhub/internal/entity"
 )
 
@@ -15,24 +15,24 @@ type FileService interface {
 	// 2. 保存文件元数据到数据库 (DocumentRepository)。
 	// 3. 将文件处理任务 (e.g., embedding) 入队 (TaskQueueClient)。
 	// 返回创建的文档实体和任务 ID。
-	// 需要从 ctx 中获取 user_id。
-	UploadFile(ctx context.Context, filename string, fileSize int64, contentType string, fileData io.Reader) (*entity.Document, string, error) // taskID is string as Asynq returns string ID
+	// 添加了 userID string 参数
+	UploadFile(ctx context.Context, userID string, filename string, fileSize int64, contentType string, fileData io.Reader) (*entity.Document, string, error) // taskID is string as Asynq returns string ID
 
 	// GetDocument 获取文档元数据。
-	// 需要从 ctx 中获取 user_id。
-	GetDocument(ctx context.Context, docID uuid.UUID) (*entity.Document, error)
+	// 添加了 userID string 参数, docID 改为 string
+	GetDocument(ctx context.Context, userID string, docID string) (*entity.Document, error)
 
 	// ListUserDocuments 列出指定用户上传的文档（带分页）。
-	// 需要从 ctx 中获取 user_id。
+	// userID 已经是 string
 	ListUserDocuments(ctx context.Context, userID string, limit int, offset int) ([]*entity.Document, error)
 
 	// DeleteDocument 删除文档及其关联数据（文件、向量、任务状态等）。
-	// 需要从 ctx 中获取 user_id。
-	DeleteDocument(ctx context.Context, docID uuid.UUID) error
+	// 添加了 userID string 参数, docID 改为 string
+	DeleteDocument(ctx context.Context, userID string, docID string) error
 
 	// GetTaskStatus 获取异步任务的状态 (需要 TaskRepository)。
-	// 需要从 ctx 中获取 user_id (如果需要按用户隔离任务视图)。
-	GetTaskStatus(ctx context.Context, taskID string) (*entity.Task, error)
+	// 添加了 userID string 参数 (推荐)
+	GetTaskStatus(ctx context.Context, userID string, taskID string) (*entity.Task, error)
 }
 
 // TaskQueueClient 定义了与任务队列交互的接口。

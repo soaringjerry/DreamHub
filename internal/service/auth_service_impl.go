@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
+	"github.com/google/uuid" // Keep for uuid.NewString() in Register
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
@@ -62,8 +62,9 @@ func (s *authServiceImpl) Register(ctx context.Context, payload RegisterPayload)
 	}
 
 	// Create user entity
+	// user.ID is now string
 	user := &entity.User{
-		ID:           uuid.New(), // Generate new UUID for the user
+		ID:           uuid.NewString(), // Generate new string UUID for the user
 		Username:     payload.Username,
 		PasswordHash: string(hashedPassword),
 		// CreatedAt and UpdatedAt will be set by the repository or DB default
@@ -120,8 +121,9 @@ func (s *authServiceImpl) Login(ctx context.Context, creds LoginCredentials) (*L
 
 	// Password is correct, generate JWT
 	expirationTime := time.Now().Add(s.jwtExpiration)
+	// user.ID is now string
 	claims := &jwtCustomClaims{
-		UserID: user.ID.String(), // Use user's UUID as string
+		UserID: user.ID, // Use string user.ID directly
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -178,12 +180,12 @@ func (s *authServiceImpl) ValidateToken(ctx context.Context, tokenString string)
 		// _, err := s.userRepo.GetUserByID(ctx, claims.UserID)
 		// if err != nil { ... return error ... }
 
-		// Validate UserID format (should be UUID)
-		_, parseErr := uuid.Parse(claims.UserID)
-		if parseErr != nil {
-			logger.ErrorContext(ctx, "JWT 中包含无效的用户 ID 格式", "user_id", claims.UserID, "error", parseErr)
+		// claims.UserID is already string. Basic check if needed.
+		if claims.UserID == "" {
+			logger.ErrorContext(ctx, "JWT 中包含空的用户 ID", "claims", claims)
 			return "", apperr.New(apperr.CodeUnauthenticated, "认证令牌无效（用户标识错误）")
 		}
+		// Removed uuid.Parse validation as UserID is now string
 
 		logger.DebugContext(ctx, "JWT 验证成功", "user_id", claims.UserID)
 		return claims.UserID, nil

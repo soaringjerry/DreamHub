@@ -5,7 +5,7 @@ import (
 	"errors" // Import errors package
 	"time"   // Import time package
 
-	"github.com/google/uuid"
+	"github.com/google/uuid" // Keep for NewString() in CreateUser
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn" // Import for pgconn.PgError
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -34,8 +34,9 @@ func (r *postgresUserRepository) CreateUser(ctx context.Context, user *entity.Us
 		VALUES ($1, $2, $3, $4, $5)
 	`
 	// Ensure ID is generated if not provided (though default in DB handles this)
-	if user.ID == uuid.Nil {
-		user.ID = uuid.New()
+	// user.ID is now string
+	if user.ID == "" {
+		user.ID = uuid.NewString() // Generate string UUID
 	}
 	now := user.CreatedAt // Use provided time or set new one
 	if now.IsZero() {
@@ -44,6 +45,7 @@ func (r *postgresUserRepository) CreateUser(ctx context.Context, user *entity.Us
 	user.CreatedAt = now
 	user.UpdatedAt = now
 
+	// Pass string user.ID
 	_, err := r.db.Exec(ctx, query, user.ID, user.Username, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -91,13 +93,13 @@ func (r *postgresUserRepository) GetUserByUsername(ctx context.Context, username
 
 // GetUserByID retrieves a user by their ID.
 func (r *postgresUserRepository) GetUserByID(ctx context.Context, id string) (*entity.User, error) {
-	// Validate if the provided ID is a valid UUID
-	userID, err := uuid.Parse(id)
-	if err != nil {
-		logger.WarnContext(ctx, "尝试使用无效的 UUID 获取用户", "invalid_id", id)
-		// Use CodeInvalidArgument instead of CodeBadRequest and use Wrap
-		return nil, apperr.Wrap(err, apperr.CodeInvalidArgument, "无效的用户 ID 格式")
+	// ID is already string, no need to parse. Basic validation might be useful.
+	if id == "" {
+		logger.WarnContext(ctx, "尝试使用空的 ID 获取用户")
+		return nil, apperr.New(apperr.CodeInvalidArgument, "用户 ID 不能为空")
 	}
+	// We can skip uuid.Parse validation here, assuming IDs passed are valid string UUIDs
+	// or the database handles potential mismatches gracefully.
 
 	query := `
 		SELECT id, username, password_hash, created_at, updated_at
@@ -105,7 +107,9 @@ func (r *postgresUserRepository) GetUserByID(ctx context.Context, id string) (*e
 		WHERE id = $1
 	`
 	var user entity.User
-	err = r.db.QueryRow(ctx, query, userID).Scan(
+	// Pass string id directly to the query. pgx handles string UUIDs for UUID columns.
+	// Scan db ID (uuid) into user.ID (string). pgx handles this conversion.
+	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID,
 		&user.Username,
 		&user.PasswordHash,

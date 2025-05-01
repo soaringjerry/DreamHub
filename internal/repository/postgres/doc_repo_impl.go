@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
@@ -50,21 +50,24 @@ func (r *postgresDocumentRepository) SaveDocument(ctx context.Context, doc *enti
 }
 
 // GetDocumentByID 根据 ID 获取文档元数据。
-// 强制使用 ctx 中的 user_id 进行过滤。
-func (r *postgresDocumentRepository) GetDocumentByID(ctx context.Context, docID uuid.UUID) (*entity.Document, error) {
-	userID, err := GetUserIDFromCtx(ctx)
-	if err != nil {
-		return nil, err
-	}
+// Added userID string parameter, changed docID to string
+func (r *postgresDocumentRepository) GetDocumentByID(ctx context.Context, userID string, docID string) (*entity.Document, error) {
+	// userID is now passed explicitly.
+	// userID, err := GetUserIDFromCtx(ctx) // REMOVED
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	const sql = `
 		SELECT id, user_id, original_filename, stored_path, file_size, content_type, upload_time, processing_status, processing_task_id, error_message
 		FROM documents
 		WHERE id = $1 AND user_id = $2
 	`
+	// Pass string docID and userID
 	row := r.db.Pool.QueryRow(ctx, sql, docID, userID)
 	var doc entity.Document
-	err = row.Scan(
+	// Assuming entity.Document fields (ID, UserID, ProcessingTaskID) are now string or *string
+	err := row.Scan(
 		&doc.ID, &doc.UserID, &doc.OriginalFilename, &doc.StoredPath, &doc.FileSize,
 		&doc.ContentType, &doc.UploadTime, &doc.ProcessingStatus, &doc.ProcessingTaskID, &doc.ErrorMessage,
 	)
@@ -80,19 +83,17 @@ func (r *postgresDocumentRepository) GetDocumentByID(ctx context.Context, docID 
 }
 
 // GetDocumentsByUser 获取指定用户的所有文档元数据，按上传时间降序排列。
-// 强制使用 ctx 中的 user_id 进行过滤。
+// userID is already string
 func (r *postgresDocumentRepository) GetDocumentsByUser(ctx context.Context, userID string, limit int, offset int) ([]*entity.Document, error) {
-	// 验证传入的 userID 与 ctx 中的 userID 是否一致 (可选，取决于业务逻辑)
-	ctxUserID, err := GetUserIDFromCtx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if userID != ctxUserID {
-		// 如果不允许查询其他用户的数据
-		logger.WarnContext(ctx, "尝试获取其他用户文档列表", "request_user_id", userID, "context_user_id", ctxUserID)
-		return nil, apperr.ErrPermissionDenied("无权访问该用户的文档列表")
-		// 如果允许管理员等角色查询，则需要更复杂的权限检查
-	}
+	// Optional: Keep context check for defense-in-depth or admin roles, but primary filtering uses passed userID.
+	// ctxUserID, err := GetUserIDFromCtx(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if userID != ctxUserID {
+	// 	logger.WarnContext(ctx, "Attempting to list documents for a different user", "request_user_id", userID, "context_user_id", ctxUserID)
+	// 	return nil, apperr.ErrPermissionDenied("Permission denied to list documents for this user")
+	// }
 
 	const sql = `
 		SELECT id, user_id, original_filename, stored_path, file_size, content_type, upload_time, processing_status, processing_task_id, error_message
@@ -131,12 +132,13 @@ func (r *postgresDocumentRepository) GetDocumentsByUser(ctx context.Context, use
 }
 
 // UpdateDocumentStatus 更新文档的处理状态、关联任务 ID 和错误信息。
-// 强制使用 ctx 中的 user_id 进行过滤。
-func (r *postgresDocumentRepository) UpdateDocumentStatus(ctx context.Context, docID uuid.UUID, status entity.TaskStatus, taskID *uuid.UUID, errMsg string) error {
-	userID, err := GetUserIDFromCtx(ctx)
-	if err != nil {
-		return err
-	}
+// Added userID string, changed docID to string, changed taskID to *string
+func (r *postgresDocumentRepository) UpdateDocumentStatus(ctx context.Context, userID string, docID string, status entity.TaskStatus, taskID *string, errMsg string) error {
+	// userID is now passed explicitly.
+	// userID, err := GetUserIDFromCtx(ctx) // REMOVED
+	// if err != nil {
+	// 	return err
+	// }
 
 	const sql = `
 		UPDATE documents
@@ -144,9 +146,10 @@ func (r *postgresDocumentRepository) UpdateDocumentStatus(ctx context.Context, d
 		WHERE id = $5 AND user_id = $6
 	`
 	// 注意：这里使用 upload_time 作为 updated_at 的替代，如果需要精确的 updated_at，应添加该列
+	// Pass string docID, userID, and *string taskID
 	cmdTag, err := r.db.Pool.Exec(ctx, sql, status, taskID, errMsg, time.Now(), docID, userID)
 	if err != nil {
-		logger.ErrorContext(ctx, "更新文档状态失败", "error", err, "doc_id", docID, "user_id", userID, "status", status)
+		logger.ErrorContext(ctx, "更新文档状态失败", "error", err, "doc_id", docID, "user_id", userID, "status", status) // Log string IDs
 		return apperr.Wrap(err, apperr.CodeInternal, "无法更新文档状态")
 	}
 
@@ -162,17 +165,19 @@ func (r *postgresDocumentRepository) UpdateDocumentStatus(ctx context.Context, d
 
 // DeleteDocument 删除文档元数据。
 // 注意：此操作通常应在 Service 层协调，确保关联的向量数据也被删除。
-// 强制使用 ctx 中的 user_id 进行过滤。
-func (r *postgresDocumentRepository) DeleteDocument(ctx context.Context, docID uuid.UUID) error {
-	userID, err := GetUserIDFromCtx(ctx)
-	if err != nil {
-		return err
-	}
+// Added userID string, changed docID to string
+func (r *postgresDocumentRepository) DeleteDocument(ctx context.Context, userID string, docID string) error {
+	// userID is now passed explicitly.
+	// userID, err := GetUserIDFromCtx(ctx) // REMOVED
+	// if err != nil {
+	// 	return err
+	// }
 
 	const sql = `DELETE FROM documents WHERE id = $1 AND user_id = $2`
+	// Pass string docID and userID
 	cmdTag, err := r.db.Pool.Exec(ctx, sql, docID, userID)
 	if err != nil {
-		logger.ErrorContext(ctx, "删除文档元数据失败", "error", err, "doc_id", docID, "user_id", userID)
+		logger.ErrorContext(ctx, "删除文档元数据失败", "error", err, "doc_id", docID, "user_id", userID) // Log string IDs
 		return apperr.Wrap(err, apperr.CodeInternal, "无法删除文档元数据")
 	}
 

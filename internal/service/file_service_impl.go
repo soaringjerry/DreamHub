@@ -4,11 +4,12 @@ import (
 	"context"
 	"io"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
-	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // 需要访问 postgres.GetUserIDFromCtx
-	"github.com/soaringjerry/dreamhub/pkg/apperr"                   // 引入 ctxutil
+
+	// "github.com/soaringjerry/dreamhub/internal/repository/postgres" // Avoid dependency on specific implementation details like GetUserIDFromCtx
+	"github.com/soaringjerry/dreamhub/pkg/apperr"
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
 
@@ -39,13 +40,15 @@ func NewFileService(
 }
 
 // UploadFile 处理文件上传，保存文件和元数据，并触发 Embedding 任务。
-func (s *fileServiceImpl) UploadFile(ctx context.Context, filename string, fileSize int64, contentType string, fileData io.Reader) (*entity.Document, string, error) {
-	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return nil, "", err
-	}
+// Added userID string parameter
+func (s *fileServiceImpl) UploadFile(ctx context.Context, userID string, filename string, fileSize int64, contentType string, fileData io.Reader) (*entity.Document, string, error) {
+	// userID is now passed explicitly, no need to extract from context here.
+	// userID, err := postgres.GetUserIDFromCtx(ctx) // REMOVED
+	// if err != nil {
+	// 	return nil, "", err
+	// }
 
-	// 1. 保存文件到存储
+	// 1. 保存文件到存储 (SaveFile already accepts userID string)
 	storedPath, err := s.fileStorage.SaveFile(ctx, userID, filename, fileData)
 	if err != nil {
 		// SaveFile 内部已经记录了错误日志
@@ -72,8 +75,8 @@ func (s *fileServiceImpl) UploadFile(ctx context.Context, filename string, fileS
 	// 3. 将 Embedding 任务入队
 	// 准备任务 payload
 	taskPayload := map[string]interface{}{
-		"user_id":      userID,
-		"document_id":  doc.ID.String(), // 将 UUID 转为字符串
+		"user_id":      userID, // Use the passed userID string
+		"document_id":  doc.ID, // Assuming doc.ID is now string UUID
 		"file_path":    storedPath,
 		"filename":     filename,
 		"content_type": contentType,
@@ -86,10 +89,11 @@ func (s *fileServiceImpl) UploadFile(ctx context.Context, filename string, fileS
 		// 如果入队失败，这是一个严重问题，可能需要标记文档状态为错误
 		// 或者尝试回滚数据库记录和文件删除 (更复杂)
 		logger.ErrorContext(ctx, "将 Embedding 任务入队失败", "error", err, "document_id", doc.ID)
-		// 尝试更新文档状态为错误
-		updateErr := s.docRepo.UpdateDocumentStatus(ctx, doc.ID, entity.TaskStatusFailed, nil, "Failed to enqueue processing task")
+		// 尝试更新文档状态为错误 (assuming doc.ID is string)
+		// Call UpdateDocumentStatus with correct signature (taskID is nil here)
+		updateErr := s.docRepo.UpdateDocumentStatus(ctx, userID, doc.ID, entity.TaskStatusFailed, nil, "Failed to enqueue processing task")
 		if updateErr != nil {
-			logger.ErrorContext(ctx, "入队失败后更新文档状态也失败", "update_error", updateErr, "original_error", err, "document_id", doc.ID)
+			logger.ErrorContext(ctx, "入队失败后更新文档状态也失败", "update_error", updateErr, "original_error", err, "document_id", doc.ID, "user_id", userID) // Log string doc.ID and userID
 		}
 		// 返回入队错误
 		return doc, "", err // 返回文档信息和入队错误
@@ -100,27 +104,36 @@ func (s *fileServiceImpl) UploadFile(ctx context.Context, filename string, fileS
 	// Asynq ID 通常不是 UUID，这里需要调整 Task 实体的 ID 处理方式。
 	// 我们可以使用 Document ID 作为 Task ID 的一部分，或者让 TaskRepository 生成 ID。
 	// 暂时不创建 Task 实体，依赖 Asynq 的状态管理，并通过 Document 关联。
-	var taskEntityID *uuid.UUID = nil // 暂时不创建 Task 实体
+	// var taskEntityID *uuid.UUID = nil // Task ID is likely string now, or not used here
+	// var taskEntityID *string = nil // REMOVED: Unused variable
 
 	// 5. 更新文档状态为 Pending 并关联 Task ID (如果 Task 实体创建成功)
 	// 由于 Asynq 返回的 taskID 不是 UUID，我们暂时不直接关联 Task ID 到 Document。
+	// TODO: Check signature of UpdateDocumentStatus, it might expect *uuid.UUID for task ID
 	// Worker 在处理时可以通过 payload 中的 document_id 来更新 Document 状态。
-	// 我们只更新状态为 Pending。
-	if updateErr := s.docRepo.UpdateDocumentStatus(ctx, doc.ID, entity.TaskStatusPending, taskEntityID, ""); updateErr != nil {
-		logger.ErrorContext(ctx, "更新文档状态为 Pending 失败", "error", updateErr, "document_id", doc.ID, "task_id", taskID)
+	// 我们只更新状态为 Pending，并关联 Asynq 返回的 taskID。
+	// Pass string doc.ID, userID, and the actual taskID from the queue
+	var returnedTaskIDPtr *string
+	if taskID != "" {
+		returnedTaskIDPtr = &taskID // Use the taskID returned from EnqueueEmbeddingTask
+	}
+	if updateErr := s.docRepo.UpdateDocumentStatus(ctx, userID, doc.ID, entity.TaskStatusPending, returnedTaskIDPtr, ""); updateErr != nil {
+		logger.ErrorContext(ctx, "更新文档状态为 Pending 并关联 TaskID 失败", "error", updateErr, "document_id", doc.ID, "user_id", userID, "task_id", taskID) // Log string doc.ID and userID
 		// 记录错误，但不阻塞返回
 	}
 
-	logger.InfoContext(ctx, "文件上传处理完成，任务已入队", "document_id", doc.ID, "task_id", taskID)
+	logger.InfoContext(ctx, "文件上传处理完成，任务已入队", "document_id", doc.ID, "task_id", taskID) // Log string doc.ID
 	return doc, taskID, nil
 }
 
 // GetDocument 获取文档元数据。
-func (s *fileServiceImpl) GetDocument(ctx context.Context, docID uuid.UUID) (*entity.Document, error) {
-	// GetDocumentByID 内部会根据 ctx 中的 user_id 过滤
-	doc, err := s.docRepo.GetDocumentByID(ctx, docID)
+// Added userID string, changed docID to string
+func (s *fileServiceImpl) GetDocument(ctx context.Context, userID string, docID string) (*entity.Document, error) {
+	// Pass userID and string docID explicitly to repository
+	// TODO: Update docRepo.GetDocumentByID signature to accept userID and string docID
+	doc, err := s.docRepo.GetDocumentByID(ctx, userID, docID) // Assuming repo method is updated
 	if err != nil {
-		// GetDocumentByID 内部已记录日志和包装错误
+		// GetDocumentByID 内部应记录日志和包装错误
 		return nil, err
 	}
 	return doc, nil
@@ -138,25 +151,30 @@ func (s *fileServiceImpl) ListUserDocuments(ctx context.Context, userID string, 
 }
 
 // DeleteDocument 删除文档及其关联数据。
-func (s *fileServiceImpl) DeleteDocument(ctx context.Context, docID uuid.UUID) error {
-	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return err
-	}
+// Added userID string, changed docID to string
+func (s *fileServiceImpl) DeleteDocument(ctx context.Context, userID string, docID string) error {
+	// userID is now passed explicitly.
+	// userID, err := postgres.GetUserIDFromCtx(ctx) // REMOVED
+	// if err != nil {
+	// 	return err
+	// }
 
 	// 1. 获取文档信息，特别是存储路径，并验证用户权限
-	doc, err := s.docRepo.GetDocumentByID(ctx, docID)
+	// Pass userID and string docID explicitly to repository
+	// TODO: Update docRepo.GetDocumentByID signature to accept userID and string docID
+	doc, err := s.docRepo.GetDocumentByID(ctx, userID, docID) // Assuming repo method is updated
 	if err != nil {
 		return err // Not found or other error
 	}
-	// GetDocumentByID 已经验证了 user_id
+	// Assuming GetDocumentByID now performs the user check
 
 	// 2. 删除向量数据 (VectorRepository)
 	// 即使失败也继续尝试删除其他数据，但记录错误
 	var vectorErr error
-	if err := s.vectorRepo.DeleteChunksByDocumentID(ctx, docID); err != nil {
-		vectorErr = err // 保存错误稍后处理
-		logger.ErrorContext(ctx, "删除文档关联的向量数据失败", "error", err, "document_id", docID, "user_id", userID)
+	// Pass userID and string docID to vectorRepo
+	if err := s.vectorRepo.DeleteChunksByDocumentID(ctx, userID, doc.ID); err != nil { // Use doc.ID (string)
+		vectorErr = err                                                                                   // 保存错误稍后处理
+		logger.ErrorContext(ctx, "删除文档关联的向量数据失败", "error", err, "document_id", doc.ID, "user_id", userID) // Log string doc.ID
 		// 不立即返回，继续删除文件和元数据
 	}
 
@@ -177,9 +195,11 @@ func (s *fileServiceImpl) DeleteDocument(ctx context.Context, docID uuid.UUID) e
 
 	// 4. 删除文档元数据 (DocumentRepository)
 	// 这是最后一步，如果之前的步骤有失败，这个操作也可能失败
-	metaErr := s.docRepo.DeleteDocument(ctx, docID)
+	// Pass userID and string docID explicitly to repository
+	// TODO: Update docRepo.DeleteDocument signature to accept userID and string docID
+	metaErr := s.docRepo.DeleteDocument(ctx, userID, doc.ID) // Assuming repo method is updated
 	if metaErr != nil {
-		logger.ErrorContext(ctx, "删除文档元数据失败", "error", metaErr, "document_id", docID, "user_id", userID)
+		logger.ErrorContext(ctx, "删除文档元数据失败", "error", metaErr, "document_id", doc.ID, "user_id", userID) // Log string doc.ID
 		// 如果元数据删除失败，之前的删除操作可能部分成功，状态不一致
 		// 返回元数据删除错误，因为它阻止了记录的完全清除
 		return metaErr
@@ -212,7 +232,9 @@ func (s *fileServiceImpl) DeleteDocument(ctx context.Context, docID uuid.UUID) e
 }
 
 // GetTaskStatus 获取异步任务的状态。
-func (s *fileServiceImpl) GetTaskStatus(ctx context.Context, taskID string) (*entity.Task, error) {
+// Added userID string parameter
+func (s *fileServiceImpl) GetTaskStatus(ctx context.Context, userID string, taskID string) (*entity.Task, error) {
+	// userID is now passed explicitly.
 	// 注意：taskID 来自 Asynq，不是我们 Task 实体的 UUID。
 	// 我们需要一种方法来通过 Asynq task ID 查询我们的 Task 实体状态，
 	// 或者直接查询 Asynq 的任务状态（如果 Asynq Client API 支持）。
@@ -223,11 +245,14 @@ func (s *fileServiceImpl) GetTaskStatus(ctx context.Context, taskID string) (*en
 	// 3. 或者，不持久化 Task 实体，直接查询 Asynq 状态（需要 Asynq Inspector）。
 
 	// 暂时返回未实现错误，因为当前 TaskRepository 不支持按 Asynq ID 查询。
-	logger.WarnContext(ctx, "GetTaskStatus 尚未完全实现以支持 Asynq Task ID 查询", "task_id", taskID)
+	// Use the passed userID in the log context
+	logger.WarnContext(ctx, "GetTaskStatus 尚未完全实现以支持 Asynq Task ID 查询", "task_id", taskID, "user_id", userID)
 	return nil, apperr.New(apperr.CodeUnimplemented, "按 Asynq 任务 ID 查询状态的功能尚未实现")
 
 	/* 假设 TaskRepository 支持按 Asynq ID 查询 (伪代码)
-	task, err := s.taskRepo.GetTaskByAsynqID(ctx, taskID)
+	// Pass userID for potential authorization check in repo
+	// TODO: Update taskRepo.GetTaskByAsynqID signature if implemented
+	task, err := s.taskRepo.GetTaskByAsynqID(ctx, userID, taskID) // Assuming repo method is updated
 	if err != nil {
 		return nil, err
 	}

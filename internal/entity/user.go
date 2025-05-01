@@ -2,13 +2,11 @@ package entity
 
 import (
 	"time"
-
-	"github.com/google/uuid"
 )
 
 // User represents a user in the system.
 type User struct {
-	ID           uuid.UUID `json:"id" db:"id"`                 // Unique identifier for the user
+	ID           string    `json:"id" db:"id"`                 // Unique identifier for the user (string UUID)
 	Username     string    `json:"username" db:"username"`     // User's chosen username (must be unique)
 	PasswordHash string    `json:"-" db:"password_hash"`       // Hashed password (never expose this in JSON)
 	CreatedAt    time.Time `json:"created_at" db:"created_at"` // Timestamp when the user was created
@@ -17,7 +15,7 @@ type User struct {
 
 // SanitizedUser represents a user structure safe for API responses, excluding sensitive data.
 type SanitizedUser struct {
-	ID        uuid.UUID `json:"id"`
+	ID        string    `json:"id"` // ID is now string
 	Username  string    `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

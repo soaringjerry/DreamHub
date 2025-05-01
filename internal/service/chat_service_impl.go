@@ -38,15 +38,16 @@ func NewChatService(
 }
 
 // HandleChatMessage 处理传入的聊天消息。
-func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string) (reply string, newConversationID uuid.UUID, err error) {
+func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID string, message string, modelName string) (reply string, newConversationID string, err error) {
 	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
 	if err != nil {
-		return "", uuid.Nil, err
+		// Return empty string for newConversationID as it's now string
+		return "", "", err
 	}
 
-	isNewConversation := (conversationID == uuid.Nil)
+	isNewConversation := (conversationID == "") // Check for empty string for new conversation
 	if isNewConversation {
-		conversationID = uuid.New() // 为新对话生成 ID
+		conversationID = uuid.NewString() // 为新对话生成 string 类型的 ID
 		logger.InfoContext(ctx, "开始新对话", "user_id", userID, "conversation_id", conversationID)
 	} else {
 		logger.InfoContext(ctx, "继续现有对话", "user_id", userID, "conversation_id", conversationID)
@@ -54,6 +55,7 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 	newConversationID = conversationID // 返回当前的（可能是新的）对话 ID
 
 	// 1. 保存用户消息
+	// Assuming entity.NewMessage now accepts string IDs
 	userMessage := entity.NewMessage(conversationID, userID, entity.SenderRoleUser, message)
 	if err := s.chatRepo.SaveMessage(ctx, userMessage); err != nil {
 		// 保存失败，直接返回错误
@@ -71,7 +73,7 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 	// 2.5 (RAG) 检索相关文档块
 	const ragLimit = 3 // 获取最多 3 个相关块 (应可配置)
 	var ragContextMessage *entity.Message
-	relevantChunks, ragErr := s.ragService.RetrieveRelevantChunks(ctx, message, ragLimit)
+	relevantChunks, ragErr := s.ragService.RetrieveRelevantChunks(ctx, userID, message, ragLimit) // Pass userID
 	if ragErr != nil {
 		// RAG 检索失败，记录警告但继续
 		logger.WarnContext(ctx, "RAG 检索相关文档块失败", "error", ragErr, "conversation_id", conversationID)
@@ -80,11 +82,13 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 		var contextBuilder strings.Builder
 		contextBuilder.WriteString("Relevant context:\n")
 		for i, chunk := range relevantChunks {
-			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID.String(), chunk.ID.String()))
+			// Assuming chunk.DocumentID and chunk.ID are now string
+			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID, chunk.ID))
 			// 可以在这里添加清理或截断 chunk.Content 的逻辑
 			contextBuilder.WriteString(chunk.Content)
 			contextBuilder.WriteString("\n")
 		}
+		// Assuming entity.NewMessage now accepts string IDs
 		ragContextMessage = entity.NewMessage(conversationID, userID, entity.SenderRoleSystem, contextBuilder.String())
 		logger.InfoContext(ctx, "成功检索 RAG 上下文", "chunk_count", len(relevantChunks), "conversation_id", conversationID)
 	}
@@ -108,6 +112,7 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 	logger.InfoContext(ctx, "LLM 生成回复成功", "conversation_id", conversationID)
 
 	// 4. 保存 AI 回复
+	// Assuming entity.NewMessage now accepts string IDs
 	aiMessage := entity.NewMessage(conversationID, userID, entity.SenderRoleAI, aiReplyContent)
 	if err := s.chatRepo.SaveMessage(ctx, aiMessage); err != nil {
 		// 保存 AI 回复失败，这是一个问题，但用户已经收到了回复
@@ -124,17 +129,18 @@ func (s *chatServiceImpl) HandleChatMessage(ctx context.Context, conversationID 
 }
 
 // HandleStreamChatMessage 处理流式聊天消息。
-func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversationID uuid.UUID, message string, modelName string, streamCh chan<- string) (newConversationID uuid.UUID, err error) {
+func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversationID string, message string, modelName string, streamCh chan<- string) (newConversationID string, err error) {
 	defer close(streamCh) // 确保 channel 在函数退出时关闭
 
 	userID, err := postgres.GetUserIDFromCtx(ctx)
 	if err != nil {
-		return uuid.Nil, err
+		// Return empty string for newConversationID as it's now string
+		return "", err
 	}
 
-	isNewConversation := (conversationID == uuid.Nil)
+	isNewConversation := (conversationID == "") // Check for empty string for new conversation
 	if isNewConversation {
-		conversationID = uuid.New()
+		conversationID = uuid.NewString() // 为新对话生成 string 类型的 ID
 		logger.InfoContext(ctx, "开始新对话 (流式)", "user_id", userID, "conversation_id", conversationID)
 	} else {
 		logger.InfoContext(ctx, "继续现有对话 (流式)", "user_id", userID, "conversation_id", conversationID)
@@ -142,6 +148,7 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 	newConversationID = conversationID
 
 	// 1. 保存用户消息
+	// Assuming entity.NewMessage now accepts string IDs
 	userMessage := entity.NewMessage(conversationID, userID, entity.SenderRoleUser, message)
 	if err := s.chatRepo.SaveMessage(ctx, userMessage); err != nil {
 		return newConversationID, err
@@ -158,17 +165,19 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 	// 2.5 (RAG) 检索相关文档块
 	const ragLimitStream = 3 // (应可配置)
 	var ragContextMessageStream *entity.Message
-	relevantChunksStream, ragErrStream := s.ragService.RetrieveRelevantChunks(ctx, message, ragLimitStream)
+	relevantChunksStream, ragErrStream := s.ragService.RetrieveRelevantChunks(ctx, userID, message, ragLimitStream) // Pass userID
 	if ragErrStream != nil {
 		logger.WarnContext(ctx, "RAG 检索相关文档块失败 (流式)", "error", ragErrStream, "conversation_id", conversationID)
 	} else if len(relevantChunksStream) > 0 {
 		var contextBuilder strings.Builder
 		contextBuilder.WriteString("Relevant context:\n")
 		for i, chunk := range relevantChunksStream {
-			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID.String(), chunk.ID.String()))
+			// Assuming chunk.DocumentID and chunk.ID are now string
+			contextBuilder.WriteString(fmt.Sprintf("--- Context %d (Doc: %s, Chunk: %s) ---\n", i+1, chunk.DocumentID, chunk.ID))
 			contextBuilder.WriteString(chunk.Content)
 			contextBuilder.WriteString("\n")
 		}
+		// Assuming entity.NewMessage now accepts string IDs
 		ragContextMessageStream = entity.NewMessage(conversationID, userID, entity.SenderRoleSystem, contextBuilder.String())
 		logger.InfoContext(ctx, "成功检索 RAG 上下文 (流式)", "chunk_count", len(relevantChunksStream), "conversation_id", conversationID)
 	}
@@ -207,6 +216,7 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 	// 4. 保存完整的 AI 回复
 	aiReplyContent := fullReply.String()
 	if aiReplyContent != "" { // 确保有内容才保存
+		// Assuming entity.NewMessage now accepts string IDs
 		aiMessage := entity.NewMessage(conversationID, userID, entity.SenderRoleAI, aiReplyContent)
 		if err := s.chatRepo.SaveMessage(ctx, aiMessage); err != nil {
 			logger.ErrorContext(ctx, "保存 AI 回复失败 (流式)", "error", err, "conversation_id", conversationID)
@@ -223,8 +233,9 @@ func (s *chatServiceImpl) HandleStreamChatMessage(ctx context.Context, conversat
 }
 
 // GetConversationMessages 获取对话消息列表。
-func (s *chatServiceImpl) GetConversationMessages(ctx context.Context, conversationID uuid.UUID, limit int, offset int) ([]*entity.Message, error) {
+func (s *chatServiceImpl) GetConversationMessages(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error) {
 	// GetMessagesByConversationID 内部会根据 ctx 中的 user_id 过滤
+	// Assuming chatRepo.GetMessagesByConversationID now accepts string conversationID
 	messages, err := s.chatRepo.GetMessagesByConversationID(ctx, conversationID, limit, offset)
 	if err != nil {
 		// 内部已记录日志和包装错误

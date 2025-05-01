@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
@@ -59,12 +58,14 @@ func (r *postgresTaskRepository) CreateTask(ctx context.Context, task *entity.Ta
 // GetTaskByID 根据 ID 获取任务信息。
 // 注意：目前未强制按 user_id 过滤，因为任务状态查询可能需要跨用户（例如管理员视图）。
 // 如果需要用户隔离，应添加 user_id 条件。
-func (r *postgresTaskRepository) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*entity.Task, error) {
+// taskID is now string
+func (r *postgresTaskRepository) GetTaskByID(ctx context.Context, taskID string) (*entity.Task, error) {
 	const sql = `
 		SELECT id, type, payload, status, user_id, file_id, original_filename, progress, result, error_message, retry_count, max_retries, created_at, started_at, completed_at, updated_at
 		FROM tasks
 		WHERE id = $1
 	`
+	// Pass string taskID
 	row := r.db.Pool.QueryRow(ctx, sql, taskID)
 	var task entity.Task
 	err := row.Scan(
@@ -86,7 +87,8 @@ func (r *postgresTaskRepository) GetTaskByID(ctx context.Context, taskID uuid.UU
 // UpdateTaskStatus 更新任务的状态、进度、错误信息和更新时间。
 // 如果状态是 Processing，则更新 StartedAt (如果尚未设置)。
 // 如果状态是 Completed 或 Failed，则更新 CompletedAt。
-func (r *postgresTaskRepository) UpdateTaskStatus(ctx context.Context, taskID uuid.UUID, status entity.TaskStatus, progress float64, errMsg string) error {
+// taskID is now string
+func (r *postgresTaskRepository) UpdateTaskStatus(ctx context.Context, taskID string, status entity.TaskStatus, progress float64, errMsg string) error {
 	now := time.Now()
 	// var startedAtExpr, completedAtExpr string // Unused variables
 	var args []interface{}
@@ -107,6 +109,7 @@ func (r *postgresTaskRepository) UpdateTaskStatus(ctx context.Context, taskID uu
 	}
 
 	sqlWhere := fmt.Sprintf(" WHERE id = $%d", argCounter)
+	// Append string taskID
 	args = append(args, taskID)
 
 	sql := sqlBase + sqlWhere
@@ -127,7 +130,8 @@ func (r *postgresTaskRepository) UpdateTaskStatus(ctx context.Context, taskID uu
 }
 
 // UpdateTaskResult 更新任务成功时的结果，并将状态设置为 Completed。
-func (r *postgresTaskRepository) UpdateTaskResult(ctx context.Context, taskID uuid.UUID, result map[string]interface{}) error {
+// taskID is now string
+func (r *postgresTaskRepository) UpdateTaskResult(ctx context.Context, taskID string, result map[string]interface{}) error {
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		logger.ErrorContext(ctx, "序列化任务结果失败", "error", err, "task_id", taskID)
@@ -140,6 +144,7 @@ func (r *postgresTaskRepository) UpdateTaskResult(ctx context.Context, taskID uu
 		SET status = $1, result = $2, error_message = '', progress = 100, completed_at = $3, updated_at = $3
 		WHERE id = $4
 	`
+	// Pass string taskID
 	cmdTag, err := r.db.Pool.Exec(ctx, sql, entity.TaskStatusCompleted, resultBytes, now, taskID)
 	if err != nil {
 		logger.ErrorContext(ctx, "更新任务结果失败", "error", err, "task_id", taskID)
@@ -156,12 +161,14 @@ func (r *postgresTaskRepository) UpdateTaskResult(ctx context.Context, taskID uu
 }
 
 // IncrementRetryCount 增加任务的重试次数和更新时间。
-func (r *postgresTaskRepository) IncrementRetryCount(ctx context.Context, taskID uuid.UUID) error {
+// taskID is now string
+func (r *postgresTaskRepository) IncrementRetryCount(ctx context.Context, taskID string) error {
 	const sql = `
 		UPDATE tasks
 		SET retry_count = retry_count + 1, updated_at = $1
 		WHERE id = $2
 	`
+	// Pass string taskID
 	cmdTag, err := r.db.Pool.Exec(ctx, sql, time.Now(), taskID)
 	if err != nil {
 		logger.ErrorContext(ctx, "增加任务重试次数失败", "error", err, "task_id", taskID)

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom'; // Import Link
 import * as api from '../services/api'; // Import API functions
 
 type Tab = 'memory' | 'knowledge' | 'prompt';
@@ -426,8 +427,19 @@ const PersonalizationPage: React.FC = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl md:text-3xl font-bold mb-6">{t('personalizationPage.title')}</h1>
+    <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto relative"> {/* Added relative positioning */}
+       {/* Back Button */}
+       <Link
+        to="/"
+        className="absolute top-4 left-4 md:top-6 md:left-6 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors duration-200"
+        aria-label={t('common.backToChat') || 'Back to Chat'} // Add aria-label for accessibility
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      </Link>
+
+      <h1 className="text-2xl md:text-3xl font-bold mb-6 text-center">{t('personalizationPage.title')}</h1> {/* Centered title */}
 
       <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="-mb-px flex space-x-6" aria-label="Tabs">

@@ -26,8 +26,8 @@ func NewRAGService(vectorRepo repository.VectorRepository, embeddingProvider Emb
 
 // RetrieveRelevantChunks 实现 RAGService 接口。
 // 它将查询文本转换为向量，然后使用向量仓库搜索相似的文档块。
-func (s *ragServiceImpl) RetrieveRelevantChunks(ctx context.Context, query string, limit int) ([]*entity.DocumentChunk, error) {
-	logger.InfoContext(ctx, "开始检索相关文档块", "query", query, "limit", limit)
+func (s *ragServiceImpl) RetrieveRelevantChunks(ctx context.Context, userID string, query string, limit int) ([]*entity.DocumentChunk, error) {
+	logger.InfoContext(ctx, "开始检索相关文档块", "userID", userID, "query", query, "limit", limit)
 
 	// 1. 将查询文本转换为嵌入向量
 	queryEmbeddings, err := s.embeddingProvider.CreateEmbeddings(ctx, []string{query})
@@ -46,11 +46,12 @@ func (s *ragServiceImpl) RetrieveRelevantChunks(ctx context.Context, query strin
 	queryVector := pgvector.NewVector(queryEmbeddings[0])
 
 	// 2. 使用向量仓库搜索相似块
-	// 注意：SearchSimilarChunks 内部会处理用户 ID 过滤 (从 ctx 获取)
+	// 2. 使用向量仓库搜索相似块
+	// userID is now passed as a parameter.
 	// 如果需要额外的元数据过滤，可以在这里传递 filter map
-	searchResults, err := s.vectorRepo.SearchSimilarChunks(ctx, queryVector, limit, nil) // 暂时不使用额外 filter
+	searchResults, err := s.vectorRepo.SearchSimilarChunks(ctx, userID, queryVector, limit, nil) // 使用传入的 userID
 	if err != nil {
-		logger.ErrorContext(ctx, "向量搜索失败", "error", err)
+		logger.ErrorContext(ctx, "向量搜索失败", "error", err, "userID", userID)
 		// vectorRepo 应该已经包装了错误，这里可以不再包装，或者根据需要再次包装
 		return nil, err // 直接返回 vectorRepo 的错误
 	}

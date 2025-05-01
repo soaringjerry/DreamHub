@@ -2,13 +2,16 @@ package api
 
 import (
 	"errors"
+	"fmt" // Add fmt for error messages
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // No longer asserting to UUID here
 	"github.com/soaringjerry/dreamhub/internal/entity"
-	postgres "github.com/soaringjerry/dreamhub/internal/repository/postgres" // Add alias and remove unused import
+	"github.com/soaringjerry/dreamhub/internal/repository" // Use base repository for errors like ErrDuplicateKey, ErrNotFound if defined there
 	"github.com/soaringjerry/dreamhub/internal/service"
+	"github.com/soaringjerry/dreamhub/pkg/apperr" // Import apperr
+	"github.com/soaringjerry/dreamhub/pkg/logger" // Import logger
 )
 
 // MemoryHandler handles API requests related to structured memories.
@@ -47,32 +50,40 @@ type UpdateMemoryRequest struct {
 // @Security BearerAuth
 // @Router /api/v1/memory/structured [post]
 func (h *MemoryHandler) CreateMemory(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	// Get userID string from context using the correct key
+	userIDVal, exists := c.Get(authorizationPayloadKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		logger.ErrorContext(c, "无法从上下文中获取 user_id", "handler", "CreateMemory")
+		err := apperr.New(apperr.CodeUnauthenticated, "无效的认证信息")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	userIDUUID, ok := userID.(uuid.UUID)
+	userIDStr, ok := userIDVal.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid User ID format in context"})
+		logger.ErrorContext(c, "上下文中的 user_id 类型不正确", "handler", "CreateMemory", "expected", "string", "actual", fmt.Sprintf("%T", userIDVal))
+		err := apperr.New(apperr.CodeInternal, "服务器内部错误 (用户标识类型错误)")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	var req CreateMemoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		logger.WarnContext(c, "无效的请求体", "handler", "CreateMemory", "error", err)
+		bindErr := apperr.Wrap(err, apperr.CodeInvalidArgument, "请求体格式错误")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(bindErr), gin.H{"error": bindErr.Error()})
 		return
 	}
 
-	memory, err := h.service.CreateMemory(c.Request.Context(), userIDUUID, req.Key, req.Value)
+	// Pass string userID to the service (assuming service accepts string)
+	memory, err := h.service.CreateMemory(c.Request.Context(), userIDStr, req.Key, req.Value)
 	if err != nil {
-		// Check against the specific error defined in the postgres implementation
-		if errors.Is(err, postgres.ErrDuplicateKey) {
-			c.JSON(http.StatusConflict, gin.H{"error": "Memory key already exists for this user"})
-		} else if err.Error() == "memory key cannot be empty" || err.Error() == "memory value cannot be empty" { // Service level validation errors
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create memory: " + err.Error()})
+		logger.ErrorContext(c, "CreateMemory service error", "user_id", userIDStr, "key", req.Key, "error", err)
+		// Handle specific errors (assuming repository defines ErrDuplicateKey)
+		if errors.Is(err, repository.ErrDuplicateKey) { // Use repository error
+			dupErr := apperr.Wrap(err, apperr.CodeConflict, "内存键已存在")
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(dupErr), gin.H{"error": dupErr.Error()})
+		} else { // Handle other potential AppErrors from service or generic internal error
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		}
 		return
 	}
@@ -91,20 +102,27 @@ func (h *MemoryHandler) CreateMemory(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/memory/structured [get]
 func (h *MemoryHandler) GetUserMemories(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	// Get userID string from context using the correct key
+	userIDVal, exists := c.Get(authorizationPayloadKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		logger.ErrorContext(c, "无法从上下文中获取 user_id", "handler", "GetUserMemories")
+		err := apperr.New(apperr.CodeUnauthenticated, "无效的认证信息")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	userIDUUID, ok := userID.(uuid.UUID)
+	userIDStr, ok := userIDVal.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid User ID format in context"})
+		logger.ErrorContext(c, "上下文中的 user_id 类型不正确", "handler", "GetUserMemories", "expected", "string", "actual", fmt.Sprintf("%T", userIDVal))
+		err := apperr.New(apperr.CodeInternal, "服务器内部错误 (用户标识类型错误)")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	memories, err := h.service.GetUserMemories(c.Request.Context(), userIDUUID)
+	// Pass string userID to the service (assuming service accepts string)
+	memories, err := h.service.GetUserMemories(c.Request.Context(), userIDStr)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve memories: " + err.Error()})
+		logger.ErrorContext(c, "GetUserMemories service error", "user_id", userIDStr, "error", err)
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
@@ -130,32 +148,39 @@ func (h *MemoryHandler) GetUserMemories(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/memory/structured/{key} [get]
 func (h *MemoryHandler) GetMemoryByKey(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	// Get userID string from context using the correct key
+	userIDVal, exists := c.Get(authorizationPayloadKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		logger.ErrorContext(c, "无法从上下文中获取 user_id", "handler", "GetMemoryByKey")
+		err := apperr.New(apperr.CodeUnauthenticated, "无效的认证信息")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	userIDUUID, ok := userID.(uuid.UUID)
+	userIDStr, ok := userIDVal.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid User ID format in context"})
+		logger.ErrorContext(c, "上下文中的 user_id 类型不正确", "handler", "GetMemoryByKey", "expected", "string", "actual", fmt.Sprintf("%T", userIDVal))
+		err := apperr.New(apperr.CodeInternal, "服务器内部错误 (用户标识类型错误)")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Memory key parameter is required"})
+		err := apperr.New(apperr.CodeInvalidArgument, "内存键参数是必需的")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	memory, err := h.service.GetMemoryByKey(c.Request.Context(), userIDUUID, key)
+	// Pass string userID to the service (assuming service accepts string)
+	memory, err := h.service.GetMemoryByKey(c.Request.Context(), userIDStr, key)
 	if err != nil {
-		// Check against the specific error defined in the postgres implementation
-		if errors.Is(err, postgres.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Memory not found for the given key"})
-		} else if err.Error() == "memory key cannot be empty" { // Service level validation error
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve memory: " + err.Error()})
+		logger.ErrorContext(c, "GetMemoryByKey service error", "user_id", userIDStr, "key", key, "error", err)
+		// Handle specific errors (assuming repository defines ErrNotFound)
+		if errors.Is(err, repository.ErrNotFound) { // Use repository error
+			nfErr := apperr.Wrap(err, apperr.CodeNotFound, "找不到指定键的内存")
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(nfErr), gin.H{"error": nfErr.Error()})
+		} else { // Handle other potential AppErrors from service or generic internal error
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		}
 		return
 	}
@@ -179,38 +204,47 @@ func (h *MemoryHandler) GetMemoryByKey(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/memory/structured/{key} [put]
 func (h *MemoryHandler) UpdateMemory(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	// Get userID string from context using the correct key
+	userIDVal, exists := c.Get(authorizationPayloadKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		logger.ErrorContext(c, "无法从上下文中获取 user_id", "handler", "UpdateMemory")
+		err := apperr.New(apperr.CodeUnauthenticated, "无效的认证信息")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	userIDUUID, ok := userID.(uuid.UUID)
+	userIDStr, ok := userIDVal.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid User ID format in context"})
+		logger.ErrorContext(c, "上下文中的 user_id 类型不正确", "handler", "UpdateMemory", "expected", "string", "actual", fmt.Sprintf("%T", userIDVal))
+		err := apperr.New(apperr.CodeInternal, "服务器内部错误 (用户标识类型错误)")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Memory key parameter is required"})
+		err := apperr.New(apperr.CodeInvalidArgument, "内存键参数是必需的")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	var req UpdateMemoryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		logger.WarnContext(c, "无效的请求体", "handler", "UpdateMemory", "error", err)
+		bindErr := apperr.Wrap(err, apperr.CodeInvalidArgument, "请求体格式错误")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(bindErr), gin.H{"error": bindErr.Error()})
 		return
 	}
 
-	memory, err := h.service.UpdateMemory(c.Request.Context(), userIDUUID, key, req.Value)
+	// Pass string userID to the service (assuming service accepts string)
+	memory, err := h.service.UpdateMemory(c.Request.Context(), userIDStr, key, req.Value)
 	if err != nil {
-		// Check against the specific error defined in the postgres implementation
-		if errors.Is(err, postgres.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Memory not found for the given key"})
-		} else if err.Error() == "memory key cannot be empty" || err.Error() == "memory value cannot be empty" { // Service level validation errors
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update memory: " + err.Error()})
+		logger.ErrorContext(c, "UpdateMemory service error", "user_id", userIDStr, "key", key, "error", err)
+		// Handle specific errors (assuming repository defines ErrNotFound)
+		if errors.Is(err, repository.ErrNotFound) { // Use repository error
+			nfErr := apperr.Wrap(err, apperr.CodeNotFound, "找不到指定键的内存")
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(nfErr), gin.H{"error": nfErr.Error()})
+		} else { // Handle other potential AppErrors from service or generic internal error
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		}
 		return
 	}
@@ -231,32 +265,39 @@ func (h *MemoryHandler) UpdateMemory(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/memory/structured/{key} [delete]
 func (h *MemoryHandler) DeleteMemory(c *gin.Context) {
-	userID, exists := c.Get("userID")
+	// Get userID string from context using the correct key
+	userIDVal, exists := c.Get(authorizationPayloadKey)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in context"})
+		logger.ErrorContext(c, "无法从上下文中获取 user_id", "handler", "DeleteMemory")
+		err := apperr.New(apperr.CodeUnauthenticated, "无效的认证信息")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
-	userIDUUID, ok := userID.(uuid.UUID)
+	userIDStr, ok := userIDVal.(string)
 	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid User ID format in context"})
+		logger.ErrorContext(c, "上下文中的 user_id 类型不正确", "handler", "DeleteMemory", "expected", "string", "actual", fmt.Sprintf("%T", userIDVal))
+		err := apperr.New(apperr.CodeInternal, "服务器内部错误 (用户标识类型错误)")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
 	key := c.Param("key")
 	if key == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Memory key parameter is required"})
+		err := apperr.New(apperr.CodeInvalidArgument, "内存键参数是必需的")
+		c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		return
 	}
 
-	err := h.service.DeleteMemory(c.Request.Context(), userIDUUID, key)
+	// Pass string userID to the service (assuming service accepts string)
+	err := h.service.DeleteMemory(c.Request.Context(), userIDStr, key)
 	if err != nil {
-		// Check against the specific error defined in the postgres implementation
-		if errors.Is(err, postgres.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Memory not found for the given key"})
-		} else if err.Error() == "memory key cannot be empty" { // Service level validation error
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete memory: " + err.Error()})
+		logger.ErrorContext(c, "DeleteMemory service error", "user_id", userIDStr, "key", key, "error", err)
+		// Handle specific errors (assuming repository defines ErrNotFound)
+		if errors.Is(err, repository.ErrNotFound) { // Use repository error
+			nfErr := apperr.Wrap(err, apperr.CodeNotFound, "找不到指定键的内存")
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(nfErr), gin.H{"error": nfErr.Error()})
+		} else { // Handle other potential AppErrors from service or generic internal error
+			c.AbortWithStatusJSON(apperr.GetHTTPStatus(err), gin.H{"error": err.Error()})
 		}
 		return
 	}

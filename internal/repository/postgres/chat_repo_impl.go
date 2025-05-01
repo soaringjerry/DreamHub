@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
@@ -45,7 +44,8 @@ func (r *postgresChatRepository) SaveMessage(ctx context.Context, message *entit
 
 // GetMessagesByConversationID 获取指定对话的所有消息，按时间戳升序排列。
 // 强制使用 ctx 中的 user_id 进行过滤。
-func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context, conversationID uuid.UUID, limit int, offset int) ([]*entity.Message, error) {
+// conversationID is now string
+func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context, conversationID string, limit int, offset int) ([]*entity.Message, error) {
 	userID, err := GetUserIDFromCtx(ctx) // 强制获取 UserID
 	if err != nil {
 		return nil, err // GetUserIDFromCtx 已经包装了错误
@@ -58,6 +58,7 @@ func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context
 		ORDER BY timestamp ASC
 		LIMIT $3 OFFSET $4
 	`
+	// Pass string conversationID to query
 	rows, err := r.db.Pool.Query(ctx, sql, conversationID, userID, limit, offset)
 	if err != nil {
 		logger.ErrorContext(ctx, "从数据库获取对话消息失败", "error", err, "conversation_id", conversationID, "user_id", userID)
@@ -87,7 +88,8 @@ func (r *postgresChatRepository) GetMessagesByConversationID(ctx context.Context
 
 // GetConversationHistory 获取指定对话的最近 N 条消息，按时间戳降序排列。
 // 强制使用 ctx 中的 user_id 进行过滤。
-func (r *postgresChatRepository) GetConversationHistory(ctx context.Context, conversationID uuid.UUID, lastN int) ([]*entity.Message, error) {
+// conversationID is now string
+func (r *postgresChatRepository) GetConversationHistory(ctx context.Context, conversationID string, lastN int) ([]*entity.Message, error) {
 	userID, err := GetUserIDFromCtx(ctx) // 强制获取 UserID
 	if err != nil {
 		return nil, err
@@ -109,6 +111,7 @@ func (r *postgresChatRepository) GetConversationHistory(ctx context.Context, con
 		ORDER BY timestamp DESC
 		LIMIT $3
 	`
+	// Pass string conversationID to query
 	rows, err := r.db.Pool.Query(ctx, sql, conversationID, userID, lastN)
 	if err != nil {
 		logger.ErrorContext(ctx, "从数据库获取最近对话历史失败", "error", err, "conversation_id", conversationID, "user_id", userID, "lastN", lastN)

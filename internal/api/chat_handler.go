@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/soaringjerry/dreamhub/internal/service"
 	"github.com/soaringjerry/dreamhub/pkg/apperr" // 需要 apperr 来处理错误
 	"github.com/soaringjerry/dreamhub/pkg/logger"
@@ -83,21 +82,11 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 	// Use the original context, user ID is implicitly available via logger/service calls if needed
 	ctx := c.Request.Context()
 
-	var conversationID uuid.UUID
-	var err error
-	if req.ConversationID != "" {
-		conversationID, err = uuid.Parse(req.ConversationID)
-		if err != nil {
-			logger.WarnContext(ctx, "无效的 conversation_id 格式", "error", err, "conversation_id", req.ConversationID)
-			appErr := apperr.New(apperr.CodeInvalidArgument, "无效的 conversation_id 格式")
-			c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
-			return
-		}
-	} else {
-		conversationID = uuid.Nil // 表示新对话
-	}
+	// conversationID is now string, no need to parse or use uuid.Nil
+	conversationID := req.ConversationID // Use the string directly, empty string means new conversation
 
 	// 调用 ChatService 处理消息，传入 ModelName
+	// Pass string conversationID directly
 	reply, newConvID, err := h.chatService.HandleChatMessage(ctx, conversationID, req.Message, req.ModelName)
 	if err != nil {
 		// HandleChatMessage 内部应该已经记录了日志并包装了错误
@@ -112,8 +101,9 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 	}
 
 	// 返回成功响应
+	// newConvID is now string, no need for .String()
 	c.JSON(http.StatusOK, ChatResponse{
-		ConversationID: newConvID.String(),
+		ConversationID: newConvID,
 		Reply:          reply,
 	})
 }
@@ -121,10 +111,10 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 // handleGetMessages 处理获取对话消息列表的请求。
 func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 	conversationIDStr := c.Param("conversation_id")
-	conversationID, err := uuid.Parse(conversationIDStr)
-	if err != nil {
-		logger.WarnContext(c.Request.Context(), "无效的 conversation_id 格式 (URL)", "error", err, "conversation_id", conversationIDStr)
-		appErr := apperr.New(apperr.CodeInvalidArgument, "无效的 conversation_id 格式")
+	// conversationID is now string, no need to parse
+	if conversationIDStr == "" { // Basic validation
+		logger.WarnContext(c.Request.Context(), "缺少 conversation_id 路径参数")
+		appErr := apperr.New(apperr.CodeInvalidArgument, "缺少 conversation_id")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
@@ -159,7 +149,8 @@ func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 	// Note: We might need to pass userID explicitly to GetConversationMessages if it needs it for authorization/filtering
 	// For now, assume the service layer handles context implicitly or doesn't need explicit userID for this call.
 
-	messages, err := h.chatService.GetConversationMessages(ctx, conversationID, limitInt, offsetInt) // Pass userID if needed: h.chatService.GetConversationMessages(ctx, userID, conversationID, limitInt, offsetInt)
+	// Pass string conversationIDStr directly
+	messages, err := h.chatService.GetConversationMessages(ctx, conversationIDStr, limitInt, offsetInt) // Pass userID if needed: h.chatService.GetConversationMessages(ctx, userID, conversationIDStr, limitInt, offsetInt)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {

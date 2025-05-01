@@ -39,7 +39,8 @@ func NewPostgresConfigRepository(db *pgxpool.Pool) repository.ConfigRepository {
 
 // GetByUserID retrieves the user configuration for a given user ID.
 // It returns the configuration with the API key still encrypted.
-func (r *postgresConfigRepository) GetByUserID(ctx context.Context, userID uint) (*entity.UserConfig, error) {
+// Changed userID type from uint to string (UUID)
+func (r *postgresConfigRepository) GetByUserID(ctx context.Context, userID string) (*entity.UserConfig, error) {
 	query := `
 		SELECT id, user_id, api_endpoint, model_name, api_key, created_at, updated_at
 		FROM user_configs
@@ -59,11 +60,11 @@ func (r *postgresConfigRepository) GetByUserID(ctx context.Context, userID uint)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			logger.InfoContext(ctx, "用户配置未找到", "user_id", userID)
+			logger.InfoContext(ctx, "用户配置未找到", "user_id", userID) // Log string userID
 			// Return specific not found error
 			return nil, apperr.New(apperr.CodeNotFound, "用户配置未找到")
 		}
-		logger.ErrorContext(ctx, "按用户 ID 获取配置时数据库出错", "user_id", userID, "error", err)
+		logger.ErrorContext(ctx, "按用户 ID 获取配置时数据库出错", "user_id", userID, "error", err) // Log string userID
 		return nil, apperr.Wrap(err, apperr.CodeInternal, "获取用户配置失败")
 	}
 
@@ -85,18 +86,19 @@ func (r *postgresConfigRepository) Upsert(ctx context.Context, config *entity.Us
 			updated_at = NOW()
 	`
 
+	// Pass string UserID from the entity
 	_, err := r.db.Exec(ctx, query,
-		config.UserID,
+		config.UserID, // Pass string UserID
 		config.ApiEndpoint,
 		config.ModelName,
 		config.ApiKey, // Pass the *[]byte directly
 	)
 
 	if err != nil {
-		logger.ErrorContext(ctx, "Upsert 用户配置时数据库出错", "user_id", config.UserID, "error", err)
+		logger.ErrorContext(ctx, "Upsert 用户配置时数据库出错", "user_id", config.UserID, "error", err) // Log string userID
 		return apperr.Wrap(err, apperr.CodeInternal, "更新用户配置失败")
 	}
 
-	logger.InfoContext(ctx, "用户配置 Upsert 成功", "user_id", config.UserID)
+	logger.InfoContext(ctx, "用户配置 Upsert 成功", "user_id", config.UserID) // Log string userID
 	return nil
 }

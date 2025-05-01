@@ -36,7 +36,9 @@ func NewConfigService(configRepo repository.ConfigRepository) ConfigService {
 }
 
 // GetUserConfig retrieves the configuration for a specific user, merging with defaults.
-func (s *configServiceImpl) GetUserConfig(ctx context.Context, userID uint) (*dto.UserConfigDTO, error) {
+// Changed userID type from uint to string (UUID)
+func (s *configServiceImpl) GetUserConfig(ctx context.Context, userID string) (*dto.UserConfigDTO, error) {
+	// Pass string userID to the repository
 	userConfig, err := s.configRepo.GetByUserID(ctx, userID)
 
 	// Prepare default DTO using global config
@@ -52,12 +54,12 @@ func (s *configServiceImpl) GetUserConfig(ctx context.Context, userID uint) (*dt
 	if err != nil {
 		if appErr, ok := err.(*apperr.AppError); ok && appErr.Code == apperr.CodeNotFound {
 			// User has no specific config, return defaults
-			logger.InfoContext(ctx, "用户配置未找到，返回默认值", "user_id", userID)
+			logger.InfoContext(ctx, "用户配置未找到，返回默认值", "user_id", userID) // Log string userID
 			return defaultDTO, nil
 		}
 		// Other error fetching config
-		logger.ErrorContext(ctx, "获取用户配置时出错", "user_id", userID, "error", err)
-		return nil, err // Return the original error (already wrapped by repo)
+		logger.ErrorContext(ctx, "获取用户配置时出错", "user_id", userID, "error", err) // Log string userID
+		return nil, err                                                        // Return the original error (already wrapped by repo)
 	}
 
 	// User config found, merge with defaults
@@ -76,25 +78,28 @@ func (s *configServiceImpl) GetUserConfig(ctx context.Context, userID uint) (*dt
 	}
 
 	// Note: We don't decrypt the API key here, just indicate if it's set.
-	logger.InfoContext(ctx, "成功获取用户配置（含默认值）", "user_id", userID)
+	logger.InfoContext(ctx, "成功获取用户配置（含默认值）", "user_id", userID) // Log string userID
 	return resultDTO, nil
 }
 
 // UpdateUserConfig updates or creates the configuration for a specific user.
-func (s *configServiceImpl) UpdateUserConfig(ctx context.Context, userID uint, updateDTO *dto.UpdateUserConfigDTO) error {
+// Changed userID type from uint to string (UUID)
+func (s *configServiceImpl) UpdateUserConfig(ctx context.Context, userID string, updateDTO *dto.UpdateUserConfigDTO) error {
 	// 1. Get existing config (or determine if it's new)
+	// Pass string userID to the repository
 	existingConfig, err := s.configRepo.GetByUserID(ctx, userID)
 	isNew := false
 	if err != nil {
 		if appErr, ok := err.(*apperr.AppError); ok && appErr.Code == apperr.CodeNotFound {
 			// Config doesn't exist, we'll create a new one
 			isNew = true
-			existingConfig = &entity.UserConfig{UserID: userID} // Create a base entity
-			logger.InfoContext(ctx, "用户配置不存在，将创建新配置", "user_id", userID)
+			// Create a base entity with the string UserID
+			existingConfig = &entity.UserConfig{UserID: userID}
+			logger.InfoContext(ctx, "用户配置不存在，将创建新配置", "user_id", userID) // Log string userID
 		} else {
 			// Other error fetching config
-			logger.ErrorContext(ctx, "更新前获取用户配置失败", "user_id", userID, "error", err)
-			return err // Return the original error
+			logger.ErrorContext(ctx, "更新前获取用户配置失败", "user_id", userID, "error", err) // Log string userID
+			return err                                                               // Return the original error
 		}
 	}
 
@@ -115,32 +120,33 @@ func (s *configServiceImpl) UpdateUserConfig(ctx context.Context, userID uint, u
 		if plaintextKey == "" {
 			// User wants to clear the key
 			configToSave.ApiKey = nil
-			logger.InfoContext(ctx, "用户请求清除 API Key", "user_id", userID)
+			logger.InfoContext(ctx, "用户请求清除 API Key", "user_id", userID) // Log string userID
 		} else {
 			// User provided a new key, encrypt it
 			encryptedKeyBytes, err := util.EncryptString(plaintextKey, s.encryptionSecret)
 			if err != nil {
-				logger.ErrorContext(ctx, "加密用户 API Key 失败", "user_id", userID, "error", err)
+				logger.ErrorContext(ctx, "加密用户 API Key 失败", "user_id", userID, "error", err) // Log string userID
 				// Return an internal error, don't expose encryption details
 				return apperr.New(apperr.CodeInternal, "无法处理 API Key")
 			}
-			configToSave.ApiKey = &encryptedKeyBytes // Store the encrypted key
-			logger.InfoContext(ctx, "用户提供了新的 API Key，已加密", "user_id", userID)
+			configToSave.ApiKey = &encryptedKeyBytes                          // Store the encrypted key
+			logger.InfoContext(ctx, "用户提供了新的 API Key，已加密", "user_id", userID) // Log string userID
 		}
 	}
 	// If updateDTO.ApiKey is nil, configToSave.ApiKey retains its existing value (or nil if new)
 
 	// 3. Upsert the configuration
+	// Upsert should now accept UserConfig with string UserID
 	err = s.configRepo.Upsert(ctx, &configToSave)
 	if err != nil {
-		logger.ErrorContext(ctx, "Upsert 用户配置失败", "user_id", userID, "error", err)
-		return err // Return the error from repository (already wrapped)
+		logger.ErrorContext(ctx, "Upsert 用户配置失败", "user_id", userID, "error", err) // Log string userID
+		return err                                                                 // Return the error from repository (already wrapped)
 	}
 
 	logAction := "更新"
 	if isNew {
 		logAction = "创建"
 	}
-	logger.InfoContext(ctx, "成功"+logAction+"用户配置", "user_id", userID)
+	logger.InfoContext(ctx, "成功"+logAction+"用户配置", "user_id", userID) // Log string userID
 	return nil
 }

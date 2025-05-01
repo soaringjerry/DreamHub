@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import (assuming AddChunks implementation doesn't need it directly)
 	"github.com/pgvector/pgvector-go" // 引入 pgvector 类型
 	"github.com/soaringjerry/dreamhub/internal/entity"
 )
@@ -26,13 +26,15 @@ type VectorRepository interface {
 	// 需要确保实现中根据 ctx 中的 user_id 进行了过滤。
 	// limit 参数指定返回结果的数量。
 	// filter 参数允许根据元数据进行额外过滤 (可选)。
-	SearchSimilarChunks(ctx context.Context, queryVector pgvector.Vector, limit int, filter map[string]any) ([]SearchResult, error)
+	// Added userID string parameter for filtering
+	SearchSimilarChunks(ctx context.Context, userID string, queryVector pgvector.Vector, limit int, filter map[string]any) ([]SearchResult, error)
 
 	// DeleteChunksByDocumentID 删除指定文档的所有相关向量块。
-	// 需要确保实现中根据 ctx 中的 user_id 进行了过滤。
-	DeleteChunksByDocumentID(ctx context.Context, documentID uuid.UUID) error
+	// Added userID string parameter for filtering
+	// Changed documentID type from uuid.UUID to string
+	DeleteChunksByDocumentID(ctx context.Context, userID string, documentID string) error
 
 	// TODO: 可能需要添加其他方法，例如：
-	// GetChunkByID(ctx context.Context, chunkID uuid.UUID) (*entity.DocumentChunk, error)
+	// GetChunkByID(ctx context.Context, userID string, chunkID string) (*entity.DocumentChunk, error) // Changed chunkID to string, added userID
 	// DeleteChunkByID(ctx context.Context, chunkID uuid.UUID) error
 }

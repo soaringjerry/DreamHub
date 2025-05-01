@@ -62,9 +62,10 @@ func (h *UploadHandler) HandleUpload(c *gin.Context) {
 	defer file.Close() // Ensure file is closed
 
 	// 5. Call FileService to handle upload and enqueue task, passing the new context and correct parameters
-	// UploadFile expects: ctx, filename, fileSize, contentType, fileData io.Reader
+	// UploadFile expects: ctx, userID, filename, fileSize, contentType, fileData io.Reader
 	// It returns: *entity.Document, taskID string, error
-	_, taskID, err := h.fileService.UploadFile(ctx, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"), file)
+	// Add the missing userID argument
+	_, taskID, err := h.fileService.UploadFile(ctx, userID, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"), file)
 	if err != nil {
 		logger.Error("UploadHandler: FileService failed", "userID", userID, "filename", fileHeader.Filename, "error", err)
 

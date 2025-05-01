@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid" // Import uuid
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/soaringjerry/dreamhub/internal/service"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
 	"github.com/soaringjerry/dreamhub/pkg/logger"
@@ -81,8 +81,8 @@ func (h *FileHandler) handleUploadFile(c *gin.Context) {
 	defer fileData.Close() // 确保文件被关闭
 
 	// 调用 FileService 处理上传
-	// Correctly call UploadFile with required arguments
-	doc, taskID, err := h.fileService.UploadFile(ctx, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"), fileData)
+	// Pass userID to UploadFile
+	doc, taskID, err := h.fileService.UploadFile(ctx, userID, fileHeader.Filename, fileHeader.Size, fileHeader.Header.Get("Content-Type"), fileData)
 	if err != nil {
 		// UploadFile 内部应该已经记录日志并包装错误
 		appErr, ok := err.(*apperr.AppError)
@@ -112,7 +112,7 @@ func (h *FileHandler) handleUploadFile(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":  "文件上传成功，正在后台处理中...",
 		"filename": doc.OriginalFilename,
-		"doc_id":   doc.ID.String(),
+		"doc_id":   doc.ID, // ID is now string, remove .String()
 		"task_id":  taskID,
 	})
 }
@@ -128,8 +128,17 @@ func (h *FileHandler) handleGetTaskStatus(c *gin.Context) {
 
 	// TODO: 从认证中间件获取 user_id 并传递给 ctx (如果需要按用户隔离任务视图)
 	ctx := c.Request.Context()
+	// Get UserID for task status (assuming service now requires it)
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(ctx, "无法从上下文中获取用户 ID (GetTaskStatus)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
 
-	task, err := h.fileService.GetTaskStatus(ctx, taskID)
+	// Pass userID to GetTaskStatus
+	task, err := h.fileService.GetTaskStatus(ctx, userID, taskID)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {
@@ -184,9 +193,9 @@ func (h *FileHandler) handleListDocuments(c *gin.Context) {
 // handleGetDocument 处理获取单个文档详情的请求。
 func (h *FileHandler) handleGetDocument(c *gin.Context) {
 	docIDStr := c.Param("doc_id")
-	docID, err := uuid.Parse(docIDStr)
-	if err != nil {
-		appErr := apperr.New(apperr.CodeInvalidArgument, "无效的文档 ID 格式")
+	// docID, err := uuid.Parse(docIDStr) // No longer parse to UUID here, pass string
+	if docIDStr == "" { // Basic validation
+		appErr := apperr.New(apperr.CodeInvalidArgument, "缺少文档 ID")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
@@ -201,8 +210,8 @@ func (h *FileHandler) handleGetDocument(c *gin.Context) {
 	}
 	logger.DebugContext(c.Request.Context(), "获取文档", "user_id", userID, "doc_id", docIDStr)
 	ctx := c.Request.Context()
-	// Assume GetDocument service method performs authorization based on context/userID implicitly or needs update
-	doc, err := h.fileService.GetDocument(ctx, docID) // Pass userID if needed: h.fileService.GetDocument(ctx, userID, docID)
+	// Pass userID and string docID to GetDocument
+	doc, err := h.fileService.GetDocument(ctx, userID, docIDStr)
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {
@@ -218,9 +227,9 @@ func (h *FileHandler) handleGetDocument(c *gin.Context) {
 // handleDeleteDocument 处理删除文档的请求。
 func (h *FileHandler) handleDeleteDocument(c *gin.Context) {
 	docIDStr := c.Param("doc_id")
-	docID, err := uuid.Parse(docIDStr)
-	if err != nil {
-		appErr := apperr.New(apperr.CodeInvalidArgument, "无效的文档 ID 格式")
+	// docID, err := uuid.Parse(docIDStr) // No longer parse to UUID here, pass string
+	if docIDStr == "" { // Basic validation
+		appErr := apperr.New(apperr.CodeInvalidArgument, "缺少文档 ID")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
@@ -235,8 +244,8 @@ func (h *FileHandler) handleDeleteDocument(c *gin.Context) {
 	}
 	logger.DebugContext(c.Request.Context(), "删除文档", "user_id", userID, "doc_id", docIDStr)
 	ctx := c.Request.Context()
-	// Assume DeleteDocument service method performs authorization based on context/userID implicitly or needs update
-	err = h.fileService.DeleteDocument(ctx, docID) // Pass userID if needed: h.fileService.DeleteDocument(ctx, userID, docID)
+	// Pass userID and string docID to DeleteDocument
+	err := h.fileService.DeleteDocument(ctx, userID, docIDStr) // Assign to err variable
 	if err != nil {
 		appErr, ok := err.(*apperr.AppError)
 		if !ok {
@@ -248,3 +257,5 @@ func (h *FileHandler) handleDeleteDocument(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "文档已成功删除"})
 }
+
+// Removed the duplicated/incorrect error handling block below

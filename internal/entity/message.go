@@ -19,8 +19,8 @@ const (
 // Message 代表一条对话消息。
 // 这对应于数据库中的 conversation_history 表。
 type Message struct {
-	ID             uuid.UUID       `json:"id"`              // 消息的唯一 ID
-	ConversationID uuid.UUID       `json:"conversation_id"` // 所属对话的 ID
+	ID             string          `json:"id"`              // 消息的唯一 ID (string UUID)
+	ConversationID string          `json:"conversation_id"` // 所属对话的 ID (string UUID)
 	UserID         string          `json:"user_id"`         // 发送消息的用户 ID (用于数据隔离)
 	SenderRole     SenderRole      `json:"sender_role"`     // 发送者角色 ('user' 或 'ai')
 	Content        string          `json:"content"`         // 消息内容
@@ -32,9 +32,10 @@ type Message struct {
 }
 
 // NewMessage 创建一个新的 Message 实例。
-func NewMessage(conversationID uuid.UUID, userID string, role SenderRole, content string) *Message {
+// conversationID is now string
+func NewMessage(conversationID string, userID string, role SenderRole, content string) *Message {
 	return &Message{
-		ID:             uuid.New(), // 自动生成新的 UUID
+		ID:             uuid.NewString(), // 自动生成新的 string UUID
 		ConversationID: conversationID,
 		UserID:         userID,
 		SenderRole:     role,

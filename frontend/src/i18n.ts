@@ -81,6 +81,8 @@ i18n
           loadingConversations: "Loading...", // Added
           errorLoadingConversationsTitle: "Error Loading Conversations", // Added
           retry: "Retry", // Added
+          // Common UI elements
+          "common.backToChat": "Back to Chat", // Added for back button
 // Auth related
           "auth.usernameLabel": "Username",
           "auth.passwordLabel": "Password",
@@ -250,6 +252,8 @@ i18n
           loadingConversations: "加载中...", // Added
           errorLoadingConversationsTitle: "加载对话出错", // Added
           retry: "重试", // Added
+          // 通用 UI 元素
+          "common.backToChat": "返回聊天", // 为返回按钮添加
 // Auth related
           "auth.usernameLabel": "用户名",
           "auth.passwordLabel": "密码",

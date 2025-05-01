@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
+	// "github.com/google/uuid" // Removed unused import
 	"github.com/pgvector/pgvector-go"
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
-	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // 需要访问 postgres.DB 和 GetUserIDFromCtx
+	"github.com/soaringjerry/dreamhub/internal/repository/postgres" // Keep for postgres.DB type
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
 	"github.com/soaringjerry/dreamhub/pkg/logger"
 )
@@ -44,7 +44,6 @@ func NewPGVectorRepository(db *postgres.DB) repository.VectorRepository {
 // AddChunks 使用循环和单条 INSERT 语句添加文档块及其向量。
 // user_id 和 document_id 被存储在 cmetadata 字段中。
 func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.DocumentChunk) error {
-	logger.InfoContext(ctx, ">>> Executing AddChunks with single INSERT logic <<<") // 添加日志标记
 	logger.InfoContext(ctx, ">>> Executing AddChunks with single INSERT logic <<<") // 添加日志标记
 	if len(chunks) == 0 {
 		return nil // 没有需要添加的块
@@ -92,15 +91,16 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 		if chunk.Metadata == nil {
 			chunk.Metadata = make(map[string]any)
 		}
+		// Use string IDs directly from the updated DocumentChunk entity
 		chunk.Metadata[metadataUserIDKey] = chunk.UserID
-		chunk.Metadata[metadataDocumentIDKey] = chunk.DocumentID.String() // 存储为字符串
-		chunk.Metadata[metadataChunkIDKey] = chunk.ID.String()            // 存储块 ID
+		chunk.Metadata[metadataDocumentIDKey] = chunk.DocumentID // Already string
+		chunk.Metadata[metadataChunkIDKey] = chunk.ID            // Already string
 
 		metadataBytes, errJson := json.Marshal(chunk.Metadata)
 		if errJson != nil {
-			logger.ErrorContext(ctx, "序列化块元数据失败", "error", errJson, "chunk_id", chunk.ID)
-			err = apperr.Wrap(errJson, apperr.CodeInternal, fmt.Sprintf("无法序列化块 %s 的元数据", chunk.ID))
-			return err // 返回错误，触发 defer 中的 Rollback
+			logger.ErrorContext(ctx, "序列化块元数据失败", "error", errJson, "chunk_id", chunk.ID)            // Log string ID
+			err = apperr.Wrap(errJson, apperr.CodeInternal, fmt.Sprintf("无法序列化块 %s 的元数据", chunk.ID)) // Use string ID
+			return err                                                                               // 返回错误，触发 defer 中的 Rollback
 		}
 
 		// 更彻底地清理文本内容，移除所有非法的 UTF8 字符和 C0 控制字符 (除了换行和制表符)
@@ -109,21 +109,15 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 			if r == '\x00' || (r < ' ' && r != '\t' && r != '\n') {
 				return -1 // -1 表示移除该 rune
 			}
-			// 检查是否为有效的 UTF8 rune (虽然 Go 字符串通常是有效的，但以防万一)
-			// if !utf8.ValidRune(r) && r != utf8.RuneError {
-			// 	return -1
-			// }
 			return r // 保留其他字符
 		}, chunk.Content)
 
 		// 直接传递 pgvector.Vector 类型和清理后的文本
 		_, errExec := tx.Exec(ctx, stmt.Name, chunk.Embedding, cleanedContent, metadataBytes)
 		if errExec != nil {
-			logger.ErrorContext(ctx, "执行 INSERT 语句失败", "error", errExec, "chunk_id", chunk.ID)
-			// Log the problematic content for debugging (be careful with large content)
-			// logger.DebugContext(ctx, "Problematic chunk content (first 100 chars)", "content_prefix", cleanedContent[:min(100, len(cleanedContent))])
-			err = apperr.Wrap(errExec, apperr.CodeInternal, fmt.Sprintf("无法插入块 %s", chunk.ID))
-			return err // 返回错误，触发 defer 中的 Rollback
+			logger.ErrorContext(ctx, "执行 INSERT 语句失败", "error", errExec, "chunk_id", chunk.ID) // Log string ID
+			err = apperr.Wrap(errExec, apperr.CodeInternal, fmt.Sprintf("无法插入块 %s", chunk.ID)) // Use string ID
+			return err                                                                         // 返回错误，触发 defer 中的 Rollback
 		}
 		insertedCount++
 	}
@@ -136,13 +130,9 @@ func (r *pgVectorRepository) AddChunks(ctx context.Context, chunks []*entity.Doc
 }
 
 // SearchSimilarChunks 搜索与查询向量相似的文档块。
-// 强制使用 ctx 中的 user_id 进行过滤。
-// 支持基于 filter map 的额外元数据过滤。
-func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, queryVector pgvector.Vector, limit int, filter map[string]any) ([]repository.SearchResult, error) {
-	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return nil, err
-	}
+// Added userID string parameter for filtering
+func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, userID string, queryVector pgvector.Vector, limit int, filter map[string]any) ([]repository.SearchResult, error) {
+	// userID is now passed explicitly.
 
 	// -- 构建 SQL 查询 --
 	// 选择列：块 ID (从元数据), 文档 ID (从元数据), 内容 (从 document 列), 元数据, 距离
@@ -159,8 +149,8 @@ func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, queryVecto
 
 	// -- 构建 WHERE 子句 --
 	whereClauses := []string{
-		// 强制用户 ID 过滤
-		fmt.Sprintf("cmetadata @> '{\"%s\": \"%s\"}'::jsonb", metadataUserIDKey, userID),
+		// Use the passed userID for filtering
+		fmt.Sprintf("cmetadata @> '{\"%s\": \"%s\"}'::jsonb", metadataUserIDKey, userID), // Use passed userID
 	}
 	args := []interface{}{queryVector} // $1 是查询向量
 	argCounter := 2                    // 从 $2 开始用于其他过滤器
@@ -192,7 +182,7 @@ func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, queryVecto
 	logger.DebugContext(ctx, "执行向量搜索查询", "sql", sql, "args_count", len(args)) // 不记录 args 的值以防敏感信息
 	rows, err := r.db.Pool.Query(ctx, sql, args...)
 	if err != nil {
-		logger.ErrorContext(ctx, "向量搜索查询失败", "error", err, "user_id", userID)
+		logger.ErrorContext(ctx, "向量搜索查询失败", "error", err, "user_id", userID) // Log passed userID
 		return nil, apperr.Wrap(err, apperr.CodeInternal, "向量搜索失败")
 	}
 	defer rows.Close()
@@ -211,29 +201,20 @@ func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, queryVecto
 			return nil, apperr.Wrap(err, apperr.CodeInternal, "处理向量搜索结果时出错")
 		}
 
-		// 解析 UUID
-		chunkID, err := uuid.Parse(chunkIDStr)
-		if err != nil {
-			logger.WarnContext(ctx, "无法解析搜索结果中的 chunk_id", "error", err, "chunk_id_str", chunkIDStr)
-			continue // 跳过无效的行
-		}
-		docID, err := uuid.Parse(docIDStr)
-		if err != nil {
-			logger.WarnContext(ctx, "无法解析搜索结果中的 document_id", "error", err, "doc_id_str", docIDStr)
-			continue // 跳过无效的行
-		}
+		// IDs are already strings from the database query (cmetadata->>'...')
 
 		// 解析元数据 JSONB
 		if err := json.Unmarshal(metadataBytes, &metadataMap); err != nil {
-			logger.WarnContext(ctx, "无法解析搜索结果中的 cmetadata", "error", err, "chunk_id", chunkID)
-			metadataMap = make(map[string]any) // 使用空 map
+			logger.WarnContext(ctx, "无法解析搜索结果中的 cmetadata", "error", err, "chunk_id", chunkIDStr) // Log string ID
+			metadataMap = make(map[string]any)                                                    // 使用空 map
 		}
 
 		// 创建 DocumentChunk 实体 (不包含 Embedding)
+		// Assign string IDs directly
 		chunk := &entity.DocumentChunk{
-			ID:         chunkID,
-			DocumentID: docID,
-			UserID:     userID, // 从上下文中获取，或从元数据中验证
+			ID:         chunkIDStr,
+			DocumentID: docIDStr,
+			UserID:     userID, // Use passed userID
 			Content:    content,
 			Metadata:   metadataMap,
 			// ChunkIndex, CreatedAt 等字段无法直接从这个查询中获取，除非它们也存储在元数据中
@@ -254,18 +235,16 @@ func (r *pgVectorRepository) SearchSimilarChunks(ctx context.Context, queryVecto
 }
 
 // DeleteChunksByDocumentID 删除指定文档的所有相关向量块。
-// 强制使用 ctx 中的 user_id 和传入的 documentID 进行过滤。
-func (r *pgVectorRepository) DeleteChunksByDocumentID(ctx context.Context, documentID uuid.UUID) error {
-	userID, err := postgres.GetUserIDFromCtx(ctx) // 强制获取 UserID
-	if err != nil {
-		return err
-	}
+// Added userID string parameter, changed documentID to string
+func (r *pgVectorRepository) DeleteChunksByDocumentID(ctx context.Context, userID string, documentID string) error {
+	// userID is now passed explicitly.
 
 	// 构建 WHERE 子句以匹配 user_id 和 document_id
 	// 使用 JSONB 操作符 @>
+	// Use passed userID and string documentID directly
 	whereClause := fmt.Sprintf(`cmetadata @> '{"%s": "%s", "%s": "%s"}'::jsonb`,
-		metadataUserIDKey, userID,
-		metadataDocumentIDKey, documentID.String(),
+		metadataUserIDKey, userID, // Use passed userID
+		metadataDocumentIDKey, documentID, // Use string documentID
 	)
 
 	sql := fmt.Sprintf("DELETE FROM %s WHERE %s", tableName, whereClause)
@@ -273,11 +252,11 @@ func (r *pgVectorRepository) DeleteChunksByDocumentID(ctx context.Context, docum
 	logger.DebugContext(ctx, "执行向量块删除操作", "sql", sql) // SQL 不包含敏感信息
 	cmdTag, err := r.db.Pool.Exec(ctx, sql)
 	if err != nil {
-		logger.ErrorContext(ctx, "删除向量块失败", "error", err, "document_id", documentID, "user_id", userID)
+		logger.ErrorContext(ctx, "删除向量块失败", "error", err, "document_id", documentID, "user_id", userID) // Log passed userID
 		return apperr.Wrap(err, apperr.CodeInternal, "无法删除向量块")
 	}
 
-	logger.InfoContext(ctx, "向量块删除操作完成", "document_id", documentID, "user_id", userID, "rows_affected", cmdTag.RowsAffected())
+	logger.InfoContext(ctx, "向量块删除操作完成", "document_id", documentID, "user_id", userID, "rows_affected", cmdTag.RowsAffected()) // Log passed userID
 	// 注意：即使 RowsAffected 为 0 也可能不是错误（可能该文档没有块，或已被删除）
 	return nil
 }
