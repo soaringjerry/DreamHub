@@ -138,8 +138,11 @@ export const useChatStore = create<ChatStore>()( // Use combined type
       deleteConversation: (conversationId: string) => { // Add type
         console.warn("Frontend deleteConversation called, but backend deletion is not implemented yet.");
         set((state: ChatStore) => { // Use combined type
-          const { [conversationId]: removedConversation, ...remainingConversations } = state.conversations; // Use a descriptive name or just destructure without assigning if truly unused
-          const { [conversationId]: removedStatus, ...remainingStatus } = state.conversationStatus; // Use a descriptive name or just destructure without assigning if truly unused
+          // 使用 delete 操作符直接删除属性
+          const remainingConversations = { ...state.conversations };
+          const remainingStatus = { ...state.conversationStatus };
+          delete remainingConversations[conversationId];
+          delete remainingStatus[conversationId];
           let newActiveId = state.activeConversationId;
           if (state.activeConversationId === conversationId) {
             const remainingIds = Object.keys(remainingConversations);
