@@ -1,5 +1,6 @@
 import { create } from 'zustand'; // Removed unused StateCreator
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware'; // Import PersistOptions
+import { useAuthStore } from './authStore'; // Import auth store
 // Removed unused uuidv4 import
 import {
   sendMessage as sendMessageApi,
@@ -349,10 +350,12 @@ export const useChatStore = create<ChatStore>()( // Use combined type
       },
 
       sendMessage: async (userMessage: string) => { // Add type
-        const { userId, activeConversationId } = get(); // Get state parts needed initially
+        // Get userId from authStore, not chatStore's potentially stale state
+        const userId = useAuthStore.getState().user?.id;
+        const { activeConversationId } = get(); // Keep getting activeConversationId from chatStore
 
         if (!userId) {
-          console.error("User ID is missing. Cannot send message.");
+          console.error("User ID is missing from authStore. Cannot send message.");
           return;
         }
 
