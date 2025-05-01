@@ -58,10 +58,10 @@ const PersonalizationPage: React.FC = () => {
     setMemoryError(null);
     try {
         // Attempt to parse value as JSON, otherwise keep as string
-        let parsedValue: any;
+        let parsedValue: unknown;
         try {
             parsedValue = JSON.parse(newMemoryValue);
-        } catch (jsonError) {
+        } catch { // Removed unused jsonError
             parsedValue = newMemoryValue; // Keep as string if not valid JSON
         }
         await api.createMemory({ key: newMemoryKey, value: parsedValue });
@@ -94,10 +94,10 @@ const PersonalizationPage: React.FC = () => {
     setIsSavingEdit(true);
     setMemoryError(null);
     try {
-        let parsedValue: any;
+        let parsedValue: unknown;
         try {
             parsedValue = JSON.parse(editingMemoryValue);
-        } catch (jsonError) {
+        } catch { // Removed unused jsonError
             parsedValue = editingMemoryValue; // Keep as string if not valid JSON
         }
         await api.updateMemory(editingMemoryKey, parsedValue);

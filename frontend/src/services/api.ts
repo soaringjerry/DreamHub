@@ -95,7 +95,7 @@ export interface StructuredMemory {
   id: string; // UUID
   user_id: string; // UUID
   key: string;
-  value: any; // JSONB in backend, so 'any' or a more specific type if known
+  value: unknown; // JSONB in backend, can be any valid JSON type
   created_at: string; // ISO string format
   updated_at: string; // ISO string format
 }
@@ -103,7 +103,7 @@ export interface StructuredMemory {
 // Payload for creating/updating memory
 export interface MemoryPayload {
   key: string;
-  value: any;
+  value: unknown;
 }
 
 // --- Document API Interfaces ---
@@ -366,7 +366,7 @@ export const getMemoryByKey = async (key: string): Promise<StructuredMemory> => 
  * @param value The new value for the entry.
  * @returns Promise containing the updated memory entry.
  */
-export const updateMemory = async (key: string, value: any): Promise<StructuredMemory> => {
+export const updateMemory = async (key: string, value: unknown): Promise<StructuredMemory> => {
     const payload: Partial<MemoryPayload> = { value }; // Backend expects value in body for PUT
     try {
       const response = await apiClient.put<StructuredMemory>(`/memory/structured/${encodeURIComponent(key)}`, payload);

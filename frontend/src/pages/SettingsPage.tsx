@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getUserConfig, updateUserConfig, UserConfigResponse, UpdateUserConfigRequest } from '../services/api';
+import { getUserConfig, updateUserConfig, UpdateUserConfigRequest } from '../services/api';
 
 const SettingsPage: React.FC = () => {
   const { t } = useTranslation();

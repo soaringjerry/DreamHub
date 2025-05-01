@@ -1,6 +1,6 @@
-import { create, StateCreator } from 'zustand'; // Import StateCreator
+import { create } from 'zustand'; // Removed unused StateCreator
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware'; // Import PersistOptions
-import { v4 as uuidv4 } from 'uuid';
+// Removed unused uuidv4 import
 import {
   sendMessage as sendMessageApi,
   uploadFile as uploadFileApi,
@@ -71,12 +71,7 @@ interface ChatActions {
 // Combine State and Actions for the store type
 type ChatStore = ChatState & ChatActions;
 
-// Define the state creator function with explicit types for set and get
-type ChatStateCreator = StateCreator<
-  ChatStore,
-  [], // No non-middleware mutators like devtools
-  [['zustand/persist', unknown]] // Middleware types
->;
+// Removed unused ChatStateCreator type definition
 
 // Define the shape of the state that will be persisted
 interface PersistedChatState {
@@ -143,8 +138,8 @@ export const useChatStore = create<ChatStore>()( // Use combined type
       deleteConversation: (conversationId: string) => { // Add type
         console.warn("Frontend deleteConversation called, but backend deletion is not implemented yet.");
         set((state: ChatStore) => { // Use combined type
-          const { [conversationId]: _, ...remainingConversations } = state.conversations;
-          const { [conversationId]: __, ...remainingStatus } = state.conversationStatus;
+          const { [conversationId]: removedConversation, ...remainingConversations } = state.conversations; // Use a descriptive name or just destructure without assigning if truly unused
+          const { [conversationId]: removedStatus, ...remainingStatus } = state.conversationStatus; // Use a descriptive name or just destructure without assigning if truly unused
           let newActiveId = state.activeConversationId;
           if (state.activeConversationId === conversationId) {
             const remainingIds = Object.keys(remainingConversations);

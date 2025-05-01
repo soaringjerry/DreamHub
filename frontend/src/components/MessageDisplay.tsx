@@ -99,7 +99,7 @@ const MessageDisplay: React.FC = () => {
             {msg.role === 'assistant' && hasCodeBlock(msg.content) ? ( // Use role
               <ReactMarkdown
                 components={{
-                  code({ node, inline, className, children, ...props }: CodeProps) {
+                  code({ inline, className, children, ...props }: CodeProps) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
                       <SyntaxHighlighter
@@ -117,7 +117,7 @@ const MessageDisplay: React.FC = () => {
                       </code>
                     );
                   },
-                  p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                  p: ({ ...props }) => <p className="mb-2 last:mb-0" {...props} />,
                 }}
               >
                 {msg.content}
