@@ -54,7 +54,7 @@ const MainLayout: React.FC = () => {
         {/* Placeholder for non-authenticated users on main route? Or rely on redirect */}
         {!isAuthenticated && (
            <div className="flex items-center justify-center w-full">
-               <p>Please log in to access the chat.</p> {/* Or redirect handled by ProtectedRoute */}
+               <p>{t('auth.pleaseLoginPrompt')}</p> {/* Or redirect handled by ProtectedRoute */}
            </div>
         )}
       </main>
@@ -136,7 +136,7 @@ function App() {
                 <button
                   onClick={handleLogout}
                   className="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary-500 flex-shrink-0"
-                  aria-label={t('logoutButton', 'Logout')}
+                  aria-label={t('auth.logoutButton')}
                 >
                   <LogOut size={14} />
                 </button>
@@ -144,9 +144,9 @@ function App() {
             ) : (
               // Optionally show Login/Register links if not authenticated
               <div className="flex items-center space-x-2 ml-3 border-l border-gray-300 dark:border-gray-600 pl-3">
-                 <Link to="/login" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">Login</Link>
+                 <Link to="/login" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">{t('auth.loginLink')}</Link>
                  <span className="text-gray-300 dark:text-gray-600">|</span>
-                 <Link to="/register" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">Register</Link>
+                 <Link to="/register" className="text-xs font-medium text-indigo-600 hover:text-indigo-500">{t('auth.registerLink')}</Link>
               </div>
             )}
 

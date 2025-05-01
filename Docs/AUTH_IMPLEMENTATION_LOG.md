@@ -98,11 +98,12 @@
     *   修改了 `Dockerfile`，在构建阶段安装 `golang-migrate/migrate` CLI，并在最终镜像中包含该工具和 `migrations` 目录。
     *   创建了 `docker-entrypoint.sh` 脚本，该脚本在容器启动时首先执行 `migrate ... up` 命令应用数据库迁移，然后才启动 `supervisord`。
     *   更新了 `Dockerfile` 的 `ENTRYPOINT` 和 `CMD` 以使用此脚本。
+    *   **迁移文件格式修复:** 将迁移文件从 `001_create_users_table.sql` 拆分为符合 golang-migrate 工具要求的 `001_create_users_table.up.sql` 和 `001_create_users_table.down.sql` 格式，解决了容器启动时出现的 "error: first .: file does not exist" 错误。
 *   **环境变量检查:**
     *   修改了 `deploy` 作业中的 SSH 脚本，在 `docker compose up` 之前增加了对服务器上 `.env` 文件中 `JWT_SECRET` 变量存在且非空的检查。如果检查失败，部署将中止。
 
 ## 5. 配置与启动
 
-*   **数据库:** 需要运行数据库迁移脚本 (`migrations/001_create_users_table.sql`) 来创建 `users` 表。对于 CI/CD 环境，这已通过 `docker-entrypoint.sh` 自动化。
+*   **数据库:** 需要运行数据库迁移脚本 (`migrations/001_create_users_table.up.sql`) 来创建 `users` 表。对于 CI/CD 环境，这已通过 `docker-entrypoint.sh` 自动化。
 *   **环境变量:** 必须在部署环境（服务器上的 `.env` 文件）中设置一个强随机字符串作为 `JWT_SECRET` 的值。CI/CD 流程会检查此变量是否存在。
 *   **启动:** 重新构建 Docker 镜像并使用 Docker Compose 启动更新后的服务。

@@ -1,8 +1,10 @@
 import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 import { useAuthStore, useAuthLoading, useAuthError } from '../store/authStore';
 
 const RegisterPage: React.FC = () => {
+const { t } = useTranslation(); // Initialize t function
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,11 +19,11 @@ const RegisterPage: React.FC = () => {
     clearError(); // Clear previous errors
 
     if (!username || !password || !confirmPassword) {
-      alert('Please fill in all fields.');
+      alert(t('register.validation.allFieldsRequired'));
       return;
     }
     if (password !== confirmPassword) {
-      alert('Passwords do not match.');
+      alert(t('register.validation.passwordsMismatch'));
       return;
     }
     // Add more validation as needed (e.g., password complexity)
@@ -29,7 +31,7 @@ const RegisterPage: React.FC = () => {
     try {
       await register({ username, password });
       // After successful registration, navigate to login page or show success message
-      alert('Registration successful! Please login.'); // Simple alert for now
+      alert(t('register.successMessage')); // Simple alert for now
       navigate('/login');
     } catch (registerError) {
       // Error is set in the store by the register action
@@ -40,14 +42,14 @@ const RegisterPage: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-900">Register for DreamHub</h2>
+        <h2 className="text-2xl font-bold text-center text-gray-900">{t('register.title')}</h2>
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div>
             <label
               htmlFor="username"
               className="block text-sm font-medium text-gray-700"
             >
-              Username
+              {t('auth.usernameLabel')}
             </label>
             <input
               id="username"
@@ -66,7 +68,7 @@ const RegisterPage: React.FC = () => {
               htmlFor="password"
               className="block text-sm font-medium text-gray-700"
             >
-              Password
+              {t('auth.passwordLabel')}
             </label>
             <input
               id="password"
@@ -85,7 +87,7 @@ const RegisterPage: React.FC = () => {
               htmlFor="confirm-password"
               className="block text-sm font-medium text-gray-700"
             >
-              Confirm Password
+              {t('register.confirmPasswordLabel')}
             </label>
             <input
               id="confirm-password"
@@ -116,14 +118,14 @@ const RegisterPage: React.FC = () => {
                   : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
               }`}
             >
-              {isLoading ? 'Registering...' : 'Register'}
+              {isLoading ? t('register.loadingButton') : t('register.submitButton')}
             </button>
           </div>
         </form>
         <p className="mt-4 text-sm text-center text-gray-600">
-          Already have an account?{' '}
+          {t('register.loginPrompt')}{' '}
           <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Login here
+            {t('register.loginLink')}
           </Link>
         </p>
       </div>

@@ -74,7 +74,31 @@ i18n
           newChatLabel: "New Chat", // Reusing from ChatInterface potentially
           noConversations: "No conversations yet.",
           deleteConversationConfirmation: "Are you sure you want to delete this conversation?",
-          deleteConversationLabel: "Delete conversation"
+          deleteConversationLabel: "Delete conversation",
+// Auth related
+          "auth.usernameLabel": "Username",
+          "auth.passwordLabel": "Password",
+          "auth.logoutButton": "Logout",
+          "auth.loginLink": "Login",
+          "auth.registerLink": "Register",
+          "auth.pleaseLoginPrompt": "Please log in to access the chat.",
+          // Login Page
+          "login.title": "Login to DreamHub",
+          "login.loadingButton": "Logging in...",
+          "login.submitButton": "Login",
+          "login.registerPrompt": "Don't have an account?",
+          "login.registerLink": "Register here",
+          "login.validation.missingCredentials": "Please enter both username and password.",
+          // Register Page
+          "register.title": "Register for DreamHub",
+          "register.confirmPasswordLabel": "Confirm Password",
+          "register.loadingButton": "Registering...",
+          "register.submitButton": "Register",
+          "register.loginPrompt": "Already have an account?",
+          "register.loginLink": "Login here",
+          "register.validation.allFieldsRequired": "Please fill in all fields.",
+          "register.validation.passwordsMismatch": "Passwords do not match.",
+          "register.successMessage": "Registration successful! Please login.",
         }
       },
       zh: {
@@ -136,7 +160,31 @@ i18n
           newChatLabel: "新建对话", // Reusing from ChatInterface potentially
           noConversations: "暂无对话。",
           deleteConversationConfirmation: "确定要删除此对话吗？",
-          deleteConversationLabel: "删除对话"
+          deleteConversationLabel: "删除对话",
+// Auth related
+          "auth.usernameLabel": "用户名",
+          "auth.passwordLabel": "密码",
+          "auth.logoutButton": "登出",
+          "auth.loginLink": "登录",
+          "auth.registerLink": "注册",
+          "auth.pleaseLoginPrompt": "请登录以访问聊天。",
+          // Login Page
+          "login.title": "登录 DreamHub",
+          "login.loadingButton": "登录中...",
+          "login.submitButton": "登录",
+          "login.registerPrompt": "还没有账户？",
+          "login.registerLink": "在此注册",
+          "login.validation.missingCredentials": "请输入用户名和密码。",
+          // Register Page
+          "register.title": "注册 DreamHub",
+          "register.confirmPasswordLabel": "确认密码",
+          "register.loadingButton": "注册中...",
+          "register.submitButton": "注册",
+          "register.loginPrompt": "已经有账户了？",
+          "register.loginLink": "在此登录",
+          "register.validation.allFieldsRequired": "请填写所有字段。",
+          "register.validation.passwordsMismatch": "密码不匹配。",
+          "register.successMessage": "注册成功！请登录。",
         }
       }
     }

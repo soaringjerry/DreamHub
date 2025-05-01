@@ -1,8 +1,10 @@
 import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom'; // Assuming react-router-dom is used
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 import { useAuthStore, useAuthLoading, useAuthError } from '../store/authStore';
 
 const LoginPage: React.FC = () => {
+const { t } = useTranslation(); // Initialize t function
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const login = useAuthStore((state) => state.login);
@@ -16,7 +18,7 @@ const LoginPage: React.FC = () => {
     clearError(); // Clear previous errors
     if (!username || !password) {
       // Basic validation, consider using a library like react-hook-form
-      alert('Please enter both username and password.');
+      alert(t('login.validation.missingCredentials'));
       return;
     }
     try {
@@ -35,14 +37,14 @@ const LoginPage: React.FC = () => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-center text-gray-900">Login to DreamHub</h2>
+        <h2 className="text-2xl font-bold text-center text-gray-900">{t('login.title')}</h2>
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div>
             <label
               htmlFor="username"
               className="block text-sm font-medium text-gray-700"
             >
-              Username
+              {t('auth.usernameLabel')}
             </label>
             <input
               id="username"
@@ -61,7 +63,7 @@ const LoginPage: React.FC = () => {
               htmlFor="password"
               className="block text-sm font-medium text-gray-700"
             >
-              Password
+              {t('auth.passwordLabel')}
             </label>
             <input
               id="password"
@@ -92,14 +94,14 @@ const LoginPage: React.FC = () => {
                   : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
               }`}
             >
-              {isLoading ? 'Logging in...' : 'Login'}
+              {isLoading ? t('login.loadingButton') : t('login.submitButton')}
             </button>
           </div>
         </form>
         <p className="mt-4 text-sm text-center text-gray-600">
-          Don't have an account?{' '}
+          {t('login.registerPrompt')}{' '}
           <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-            Register here
+            {t('login.registerLink')}
           </Link>
         </p>
       </div>
