@@ -246,8 +246,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
         setConversationStatus(targetConversationId, { isLoading: true, error: null });
 
         try {
-          // 2. 调用 API
-          const response = await sendMessageApi(userMessage, targetConversationId, userId);
+          // 2. 调用 API (Remove userId argument)
+          const response = await sendMessageApi(userMessage, targetConversationId);
 
           // 确认返回的 ID (理论上应该匹配)
           if (response.conversation_id !== targetConversationId) {
@@ -296,7 +296,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
         setUploadError(null);
 
         try {
-          const response = await uploadFileApi(file, userId);
+          // Call uploadFileApi (Remove userId argument)
+          const response = await uploadFileApi(file);
 
           addUploadedFile({
             name: file.name,
