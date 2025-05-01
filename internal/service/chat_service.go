@@ -27,8 +27,11 @@ type ChatService interface {
 	// 需要从 ctx 中获取 user_id。
 	GetConversationMessages(ctx context.Context, conversationID uuid.UUID, limit int, offset int) ([]*entity.Message, error)
 
+	// GetUserConversations 获取指定用户的所有对话基本信息。
+	// 需要从 ctx 中获取 user_id。
+	GetUserConversations(ctx context.Context, userID string) ([]*entity.Conversation, error)
+
 	// TODO: 可能需要添加其他方法，例如：
-	// ListConversations(ctx context.Context, limit int, offset int) ([]*entity.ConversationSummary, error)
 	// DeleteConversation(ctx context.Context, conversationID uuid.UUID) error
 }
 

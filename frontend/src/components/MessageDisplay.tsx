@@ -1,8 +1,8 @@
 // src/components/MessageDisplay.tsx
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-// 导入新的选择器
-import { useActiveMessages } from '../store/chatStore';
+// 导入新的选择器和 Message 类型
+import { useActiveMessages, Message } from '../store/chatStore'; // Import Message type
 import { User, Bot, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -61,22 +61,22 @@ const MessageDisplay: React.FC = () => {
 
   return (
     <div className="space-y-4"> {/* Adjusted spacing */}
-      {/* 确保 messages 是一个数组 */}
-      {Array.isArray(messages) && messages.map((msg, index) => (
+      {/* Ensure messages is an array and use the correct Message type */}
+      {Array.isArray(messages) && messages.map((msg: Message) => ( // Use Message type
         <div
-          // 使用时间戳和索引组合 key，更稳定
-          key={`${msg.timestamp}-${index}`}
-          className={`flex items-start gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`}
+          // Use message ID as key, it should be unique from backend
+          key={msg.id}
+          className={`flex items-start gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fadeIn`} // Use role
         >
           {/* Avatar for AI */}
-          {msg.sender === 'ai' && (
+          {msg.role === 'assistant' && ( // Use role
             <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
               isStatusMessage(msg.content)
-                ? 'bg-green-100 dark:bg-green-800/50' // Status message icon background
-                : 'bg-primary-100 dark:bg-gray-700' // AI icon background
+                ? 'bg-green-100 dark:bg-green-800/50'
+                : 'bg-primary-100 dark:bg-gray-700'
             }`}>
               {isStatusMessage(msg.content) ? (
-                <FileText size={16} className="text-green-600 dark:text-green-400" /> // 或者用其他状态图标
+                <FileText size={16} className="text-green-600 dark:text-green-400" />
               ) : (
                 <Bot size={16} className="text-primary-600 dark:text-primary-400" />
               )}
@@ -86,20 +86,19 @@ const MessageDisplay: React.FC = () => {
           {/* Message Bubble */}
           <div
             className={`max-w-sm md:max-w-md lg:max-w-lg px-3.5 py-2.5 rounded-lg shadow-xs text-sm leading-relaxed break-words
-                       ${msg.sender === 'user'
+                       ${msg.role === 'user' // Use role
                          ? 'bg-primary-500 dark:bg-primary-600 text-white rounded-tr-md'
                          : isStatusMessage(msg.content)
-                           ? 'bg-green-50 dark:bg-gray-750 border border-green-100 dark:border-gray-600 text-green-700 dark:text-green-300 rounded-tl-md font-medium' // Status message style
+                           ? 'bg-green-50 dark:bg-gray-750 border border-green-100 dark:border-gray-600 text-green-700 dark:text-green-300 rounded-tl-md font-medium'
                            : hasCodeBlock(msg.content)
-                             ? 'bg-gray-800 dark:bg-gray-900 border border-gray-700 dark:border-gray-700 text-gray-100 rounded-tl-md p-0 overflow-hidden' // AI code message style
-                             : 'bg-gray-100 dark:bg-gray-750 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-tl-md' // AI default message style
+                             ? 'bg-gray-800 dark:bg-gray-900 border border-gray-700 dark:border-gray-700 text-gray-100 rounded-tl-md p-0 overflow-hidden'
+                             : 'bg-gray-100 dark:bg-gray-750 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-100 rounded-tl-md'
                        }`}
           >
             {/* Code Block Rendering */}
-            {msg.sender === 'ai' && hasCodeBlock(msg.content) ? (
+            {msg.role === 'assistant' && hasCodeBlock(msg.content) ? ( // Use role
               <ReactMarkdown
                 components={{
-                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
                   code({ node, inline, className, children, ...props }: CodeProps) {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
@@ -118,15 +117,14 @@ const MessageDisplay: React.FC = () => {
                       </code>
                     );
                   },
-                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
                   p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
                 }}
               >
                 {msg.content}
               </ReactMarkdown>
-            ) : isStatusMessage(msg.content) && msg.sender === 'ai' ? (
+            ) : isStatusMessage(msg.content) && msg.role === 'assistant' ? ( // Use role
               // Status Message Content
-              <span>{msg.content}</span> // 直接显示状态消息内容
+              <span>{msg.content}</span>
             ) : (
               // Default Text Message Content
               <div className="whitespace-pre-wrap">{msg.content}</div>
@@ -134,7 +132,7 @@ const MessageDisplay: React.FC = () => {
           </div>
 
           {/* Avatar for User */}
-          {msg.sender === 'user' && (
+          {msg.role === 'user' && ( // Use role
             <div className="flex-shrink-0 w-8 h-8 rounded-full bg-secondary-500 dark:bg-secondary-600 shadow-sm flex items-center justify-center">
               <User size={16} className="text-white" />
             </div>

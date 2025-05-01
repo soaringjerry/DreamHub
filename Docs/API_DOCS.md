@@ -232,7 +232,221 @@
     *   **500 Internal Server Error**: 删除过程中发生错误（删除文件、向量或元数据失败）。
     *   *(示例见通用约定)*
 
+### 2.6 用户配置 (`/users/me/config`)
+
+管理当前登录用户的配置信息。**注意:** 这些端点依赖于有效的用户认证（例如 JWT Token），而不是临时传递 `user_id`。
+
+#### 2.6.1 获取用户配置
+
+*   **方法**: `GET`
+*   **路径**: `/api/v1/users/me/config`
+*   **认证**: 需要有效的用户认证 (JWT Token)。
+*   **成功响应 (200 OK)**: 返回用户的配置对象 (`entity.UserConfig`)。
+    *   `Content-Type`: `application/json`
+    *   **Body**:
+        ```json
+        {
+          "user_id": "user-uuid-string",
+          "openai_api_key": "sk-...", // 注意：实际返回时可能部分屏蔽或不返回敏感信息
+          "default_model": "gpt-4",
+          "created_at": "2025-05-01T10:00:00Z",
+          "updated_at": "2025-05-01T10:00:00Z"
+        }
+        ```
+*   **错误响应**:
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **404 Not Found**: 用户配置不存在（可能是新用户首次访问）。
+    *   **500 Internal Server Error**: 查询数据库失败或解密密钥失败。
+    *   *(示例见通用约定)*
+
+#### 2.6.2 更新用户配置
+
+*   **方法**: `PUT`
+*   **路径**: `/api/v1/users/me/config`
+*   **认证**: 需要有效的用户认证 (JWT Token)。
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 对象 (`dto.UpdateUserConfigDTO`)，包含要更新的字段。允许部分更新。
+    ```json
+    // 示例：只更新 API Key
+    {
+      "openai_api_key": "new-sk-..."
+    }
+    // 示例：只更新默认模型
+    {
+      "default_model": "gpt-4-turbo"
+    }
+    // 示例：同时更新
+    {
+      "openai_api_key": "another-sk-...",
+      "default_model": "gpt-3.5-turbo"
+    }
+    ```
+*   **成功响应 (200 OK)**: 返回更新后的用户配置对象 (`entity.UserConfig`)。
+    *   `Content-Type`: `application/json`
+    *   **Body**:
+        ```json
+        {
+          "user_id": "user-uuid-string",
+          "openai_api_key": "new-sk-...", // 注意：实际返回时可能部分屏蔽或不返回敏感信息
+          "default_model": "gpt-4-turbo", // 已更新
+          "created_at": "2025-05-01T10:00:00Z",
+          "updated_at": "2025-05-01T11:20:30Z" // 更新时间已改变
+        }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效（例如，字段类型错误）。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 更新数据库失败或加密密钥失败。
+    *   *(示例见通用约定)*
 ### 2.6 健康检查 (`/health`)
+### 2.7 获取对话列表 (`/conversations`)
+
+获取当前登录用户的对话列表（通常只包含对话 ID 和标题/摘要）。
+
+*   **方法**: `GET`
+*   **路径**: `/api/v1/conversations`
+*   **认证**: 需要有效的用户认证 (JWT Token)。
+*   **查询参数 (可选)**:
+    *   `limit`: (int, default: 50) 返回对话数量上限。
+    *   `offset`: (int, default: 0) 跳过的对话数量。
+*   **成功响应 (200 OK)**: 返回对话信息对象的数组。具体结构取决于后端实现（例如，可能包含 `id`, `title`, `last_updated_at` 等）。
+    *   `Content-Type`: `application/json`
+    *   **Body**:
+        ```json
+        [
+          {
+            "id": "conv-uuid-1",
+            "title": "关于项目 A 的讨论", // 或首条消息摘要
+            "last_message_timestamp": "2025-05-01T11:00:00Z"
+          },
+          {
+            "id": "conv-uuid-2",
+            "title": "API 设计思路",
+            "last_message_timestamp": "2025-04-30T15:30:00Z"
+          }
+          // ...
+        ]
+        ```
+*   **错误响应**:
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 查询数据库失败。
+    *   *(示例见通用约定)*
+
+### 2.8 结构化记忆 (`/memory/structured`)
+
+管理用户的结构化记忆条目（键值对）。
+
+*   **认证**: 所有端点都需要有效的用户认证 (JWT Token)。
+
+#### 2.8.1 创建或更新记忆条目
+
+*   **方法**: `POST`
+*   **路径**: `/api/v1/memory/structured`
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 对象 (`entity.StructuredMemory`)
+    ```json
+    {
+      "key": "user_preference_theme",
+      "value": { "mode": "dark", "accent_color": "#8844ee" } // value 可以是任何 JSON 结构
+    }
+    ```
+*   **成功响应 (201 Created 或 200 OK)**: 返回创建或更新后的记忆条目。
+    *   `Content-Type`: `application/json`
+    *   **Body**:
+        ```json
+        {
+          "id": "memory-uuid-1",
+          "user_id": "user-uuid-string",
+          "key": "user_preference_theme",
+          "value": { "mode": "dark", "accent_color": "#8844ee" },
+          "created_at": "2025-05-01T11:30:00Z",
+          "updated_at": "2025-05-01T11:30:00Z"
+        }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效（缺少 `key` 或 `value`）。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 数据库操作失败。
+    *   *(示例见通用约定)*
+
+#### 2.8.2 获取所有记忆条目
+
+*   **方法**: `GET`
+*   **路径**: `/api/v1/memory/structured`
+*   **成功响应 (200 OK)**: 返回该用户的所有记忆条目数组。
+    *   `Content-Type`: `application/json`
+    *   **Body**: `entity.StructuredMemory` 数组
+        ```json
+        [
+          { "id": "...", "user_id": "...", "key": "key1", "value": {...}, ... },
+          { "id": "...", "user_id": "...", "key": "key2", "value": "...", ... }
+        ]
+        ```
+*   **错误响应**:
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 查询数据库失败。
+    *   *(示例见通用约定)*
+
+#### 2.8.3 获取特定记忆条目
+
+*   **方法**: `GET`
+*   **路径**: `/api/v1/memory/structured/{key}`
+*   **路径参数**:
+    *   `key`: (string, required) 要获取的记忆条目的键。
+*   **成功响应 (200 OK)**: 返回匹配的记忆条目。
+    *   `Content-Type`: `application/json`
+    *   **Body**: `entity.StructuredMemory`
+        ```json
+        { "id": "...", "user_id": "...", "key": "user_preference_theme", "value": {...}, ... }
+        ```
+*   **错误响应**:
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **404 Not Found**: 指定 `key` 的记忆条目不存在。
+    *   **500 Internal Server Error**: 查询数据库失败。
+    *   *(示例见通用约定)*
+
+#### 2.8.4 更新特定记忆条目 (按 Key)
+
+*   **方法**: `PUT`
+*   **路径**: `/api/v1/memory/structured/{key}`
+*   **路径参数**:
+    *   `key`: (string, required) 要更新的记忆条目的键。
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 对象，只包含 `value` 字段。
+    ```json
+    {
+      "value": { "mode": "light", "accent_color": "#00aabb" } // 新的 value
+    }
+    ```
+*   **成功响应 (200 OK)**: 返回更新后的记忆条目。
+    *   `Content-Type`: `application/json`
+    *   **Body**: `entity.StructuredMemory`
+        ```json
+        { "id": "...", "user_id": "...", "key": "user_preference_theme", "value": { "mode": "light", ... }, "updated_at": "...", ... }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效（缺少 `value`）。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **404 Not Found**: 指定 `key` 的记忆条目不存在。
+    *   **500 Internal Server Error**: 更新数据库失败。
+    *   *(示例见通用约定)*
+
+#### 2.8.5 删除特定记忆条目
+
+*   **方法**: `DELETE`
+*   **路径**: `/api/v1/memory/structured/{key}`
+*   **路径参数**:
+    *   `key`: (string, required) 要删除的记忆条目的键。
+*   **成功响应 (204 No Content)**: 表示成功删除，响应体为空。
+*   **错误响应**:
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **404 Not Found**: 指定 `key` 的记忆条目不存在。
+    *   **500 Internal Server Error**: 删除数据库记录失败。
+    *   *(示例见通用约定)*
+### 2.9 健康检查 (`/health`)
 
 检查 API 服务器是否正在运行。
 

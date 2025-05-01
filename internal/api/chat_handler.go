@@ -173,6 +173,37 @@ func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 	c.JSON(http.StatusOK, messages)
 }
 
+// GetUserConversationsHandler 处理获取用户所有对话列表的请求。
+func (h *ChatHandler) GetUserConversationsHandler(c *gin.Context) {
+	// 从认证中间件设置的上下文中获取 UserID
+	userID, ok := GetUserIDFromContext(c)
+	if !ok {
+		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (GetUserConversations)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	logger.DebugContext(c.Request.Context(), "获取用户对话列表", "user_id", userID)
+	ctx := c.Request.Context()
+
+	// 调用 ChatService 获取对话列表
+	conversations, err := h.chatService.GetUserConversations(ctx, userID)
+	if err != nil {
+		// GetUserConversations 内部应该已经记录了日志并包装了错误
+		appErr, ok := err.(*apperr.AppError)
+		if !ok {
+			// 如果不是 AppError，包装为内部错误
+			appErr = apperr.Wrap(err, apperr.CodeInternal, "获取用户对话列表时发生未知错误")
+		}
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+
+	// 返回对话列表 (entity.Conversation 结构体已经有 json tag)
+	// 如果列表为空，也会返回一个空的 JSON 数组 `[]`
+	c.JSON(http.StatusOK, conversations)
+}
+
 // handleChatWebSocket 处理 WebSocket 连接请求 (未来实现)。
 // func (h *ChatHandler) handleChatWebSocket(c *gin.Context) {
 //  // TODO: 实现 WebSocket 逻辑

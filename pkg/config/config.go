@@ -26,6 +26,7 @@ type Config struct {
 	JWTExpirationMinutes int    // JWT 过期时间（分钟）
 	// 可以根据需要添加更多配置项...
 	// 例如：FrontendURL, VectorDBAddr 等
+	UserAPIKeyEncryptionSecret string // 用于加密用户 API Key 的密钥
 }
 
 var (
@@ -64,11 +65,12 @@ func LoadConfig() *Config {
 			OpenAIAPIKey:  getEnv("OPENAI_API_KEY", ""),           // 没有默认值，必须提供
 			OpenAIModel:   getEnv("OPENAI_MODEL", ""),             // 新增：加载聊天模型名称，默认为空
 			// OpenAIEmbeddingModel: getEnv("OPENAI_EMBEDDING_MODEL", ""), // TODO: Add if needed
-			UploadDir:            getEnv("UPLOAD_DIR", "./uploads"), // 默认上传目录
-			LogLevel:             getEnv("LOG_LEVEL", "info"),       // 默认日志级别 info
-			WorkerConcurrency:    workerConcurrency,
-			JWTSecret:            getEnv("JWT_SECRET", ""), // 没有默认值，必须提供
-			JWTExpirationMinutes: jwtExpirationMinutes,
+			UploadDir:                  getEnv("UPLOAD_DIR", "./uploads"), // 默认上传目录
+			LogLevel:                   getEnv("LOG_LEVEL", "info"),       // 默认日志级别 info
+			WorkerConcurrency:          workerConcurrency,
+			JWTSecret:                  getEnv("JWT_SECRET", ""), // 没有默认值，必须提供
+			JWTExpirationMinutes:       jwtExpirationMinutes,
+			UserAPIKeyEncryptionSecret: getEnv("USER_API_KEY_ENCRYPTION_SECRET", ""), // 没有默认值，必须提供
 		}
 
 		// 可以在这里添加对必要配置项的检查
@@ -83,6 +85,9 @@ func LoadConfig() *Config {
 			log.Println("警告: 环境变量 JWT_SECRET 未设置。在生产环境中，请务必设置一个强密钥。")
 			// 可以选择在这里 Fatal 退出，或者在 auth service 中使用默认值（如已实现）
 			// log.Fatal("错误: 环境变量 JWT_SECRET 未设置。")
+		}
+		if cfg.UserAPIKeyEncryptionSecret == "" {
+			log.Fatal("错误: 环境变量 USER_API_KEY_ENCRYPTION_SECRET 未设置。这是加密用户 API Key 所必需的。")
 		}
 	})
 	return cfg

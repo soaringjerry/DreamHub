@@ -69,12 +69,18 @@ i18n
           setUserIdPlaceholder: "Set User ID",
           saveUserIdButton: "Save User ID",
           setUserIdToUpload: "Please set a User ID before uploading files.",
+          // Header translations (besides appTitle)
+          "header.settingsLink": "Settings",
+          "header.personalizationLink": "Personalization", // Added
           // ConversationList translations
           conversationsTitle: "Conversations",
-          newChatLabel: "New Chat", // Reusing from ChatInterface potentially
+          newChatLabel: "New Chat",
           noConversations: "No conversations yet.",
           deleteConversationConfirmation: "Are you sure you want to delete this conversation?",
           deleteConversationLabel: "Delete conversation",
+          loadingConversations: "Loading...", // Added
+          errorLoadingConversationsTitle: "Error Loading Conversations", // Added
+          retry: "Retry", // Added
 // Auth related
           "auth.usernameLabel": "Username",
           "auth.passwordLabel": "Password",
@@ -99,9 +105,86 @@ i18n
           "register.validation.allFieldsRequired": "Please fill in all fields.",
           "register.validation.passwordsMismatch": "Passwords do not match.",
           "register.successMessage": "Registration successful! Please login.",
-        }
-      },
-      zh: {
+          // Settings Page
+          "settings.title": "Settings",
+          "settings.description": "Configure your application settings here.", // Added from initial component
+          "settings.apiEndpointLabel": "API Endpoint",
+          "settings.apiEndpointPlaceholder": "e.g., https://api.example.com/v1",
+          "settings.apiEndpointHint": "Optional. Leave blank to use the default.",
+          "settings.defaultModelLabel": "Default Model Name",
+          "settings.defaultModelPlaceholder": "e.g., gpt-4o",
+          "settings.defaultModelHint": "Optional. The default model to use for chats.",
+          "settings.apiKeyLabel": "API Key",
+          "settings.apiKeyPlaceholder": "Enter your API key",
+          "settings.apiKeyPlaceholderUpdate": "Enter new key to update, leave blank to keep current",
+         "settings.apiKeyHint": "Optional. Your personal API key for the service.",
+          "settings.apiKeyHintUpdate": "An API key is currently set. Enter a new key to replace it, or leave blank to keep the existing one.",
+         "settings.resetButton": "Reset",
+         "settings.saveButton": "Save Changes",
+          "settings.saving": "Saving...",
+          "settings.saveSuccess": "Settings saved successfully!",
+          "settings.saveError": "Error saving settings",
+          "settings.loadingConfig": "Loading configuration...",
+          "settings.loadingError": "Error loading configuration",
+          // Personalization Page
+          "personalizationPage.title": "Personalization (Memory)",
+          "personalizationPage.tabs.memory": "Structured Memory",
+          "personalizationPage.tabs.knowledge": "Knowledge Base",
+          "personalizationPage.tabs.prompt": "Custom Prompt",
+          // Structured Memory Tab
+          "personalizationPage.memory.title": "Manage Structured Memory",
+          "personalizationPage.memory.addTitle": "Add New Entry",
+          "personalizationPage.memory.keyPlaceholder": "Enter Key",
+          "personalizationPage.memory.valuePlaceholder": "Enter Value (string or JSON)",
+          "personalizationPage.memory.addButton": "Add Entry",
+          "personalizationPage.memory.addingButton": "Adding...",
+          "personalizationPage.memory.loading": "Loading memory entries...",
+          "personalizationPage.memory.errorLoading": "Error loading memory entries.",
+          "personalizationPage.memory.errorAdding": "Error adding memory entry.",
+          "personalizationPage.memory.errorEmptyFields": "Key and Value cannot be empty.",
+          "personalizationPage.memory.noEntries": "No memory entries found.",
+          "personalizationPage.memory.tableHeaderKey": "Key",
+          "personalizationPage.memory.tableHeaderValue": "Value",
+          "personalizationPage.memory.tableHeaderActions": "Actions",
+          "personalizationPage.memory.editButton": "Edit",
+          "personalizationPage.memory.deleteButton": "Delete",
+          "personalizationPage.memory.saveButton": "Save",
+          "personalizationPage.memory.savingButton": "Saving...",
+          "personalizationPage.memory.cancelButton": "Cancel",
+          "personalizationPage.memory.deletingButton": "Deleting...",
+          "personalizationPage.memory.errorUpdating": "Error updating memory entry.",
+          "personalizationPage.memory.errorDeleting": "Error deleting memory entry.",
+          "personalizationPage.memory.deleteConfirmation": "Are you sure you want to delete the memory entry with key \"{{key}}\"?",
+          // Knowledge Base Tab
+          "personalizationPage.knowledge.title": "Manage Knowledge Base",
+          "personalizationPage.knowledge.loading": "Loading documents...",
+          "personalizationPage.knowledge.errorLoading": "Error loading documents.",
+          "personalizationPage.knowledge.noDocuments": "No documents found.",
+          "personalizationPage.knowledge.tableHeaderFilename": "Filename",
+          "personalizationPage.knowledge.tableHeaderStatus": "Status",
+          "personalizationPage.knowledge.tableHeaderUploadedAt": "Uploaded At",
+          "personalizationPage.knowledge.tableHeaderActions": "Actions",
+          "personalizationPage.knowledge.status.pending": "Pending",
+          "personalizationPage.knowledge.status.processing": "Processing",
+          "personalizationPage.knowledge.status.completed": "Completed",
+          "personalizationPage.knowledge.status.failed": "Failed",
+          "personalizationPage.knowledge.deleteButton": "Delete",
+          "personalizationPage.knowledge.deletingButton": "Deleting...",
+          "personalizationPage.knowledge.errorDeleting": "Error deleting document.",
+          "personalizationPage.knowledge.deleteConfirmation": "Are you sure you want to delete the document \"{{filename}}\"?",
+          // Custom Prompt Tab
+          "personalizationPage.prompt.title": "Customize System Prompt",
+          "personalizationPage.prompt.description": "Enter a custom system prompt that will be used by the AI assistant during conversations. Leave blank to use the default.",
+          "personalizationPage.prompt.placeholder": "Enter your custom prompt here...",
+          "personalizationPage.prompt.loading": "Loading custom prompt...",
+          "personalizationPage.prompt.errorLoading": "Error loading custom prompt.",
+          "personalizationPage.prompt.saveButton": "Save Prompt",
+          "personalizationPage.prompt.savingButton": "Saving...",
+          "personalizationPage.prompt.saveSuccess": "Custom prompt saved successfully!",
+          "personalizationPage.prompt.errorSaving": "Error saving custom prompt.",
+       }
+     },
+     zh: {
         translation: {
           // 在这里添加中文翻译
           greeting: "你好！",
@@ -155,12 +238,18 @@ i18n
           setUserIdPlaceholder: "设置用户ID",
           saveUserIdButton: "保存用户ID",
           setUserIdToUpload: "请先设置用户ID才能上传文件。",
+          // 页眉翻译 (除了 appTitle)
+          "header.settingsLink": "设置",
+          "header.personalizationLink": "个性化", // Added
           // ConversationList translations
           conversationsTitle: "对话列表",
-          newChatLabel: "新建对话", // Reusing from ChatInterface potentially
+          newChatLabel: "新建对话",
           noConversations: "暂无对话。",
           deleteConversationConfirmation: "确定要删除此对话吗？",
           deleteConversationLabel: "删除对话",
+          loadingConversations: "加载中...", // Added
+          errorLoadingConversationsTitle: "加载对话出错", // Added
+          retry: "重试", // Added
 // Auth related
           "auth.usernameLabel": "用户名",
           "auth.passwordLabel": "密码",
@@ -185,9 +274,86 @@ i18n
           "register.validation.allFieldsRequired": "请填写所有字段。",
           "register.validation.passwordsMismatch": "密码不匹配。",
           "register.successMessage": "注册成功！请登录。",
-        }
-      }
-    }
+          // 设置页面
+          "settings.title": "设置",
+          "settings.description": "在此配置您的应用程序设置。", // 从初始组件添加
+          "settings.apiEndpointLabel": "API 端点",
+          "settings.apiEndpointPlaceholder": "例如：https://api.example.com/v1",
+          "settings.apiEndpointHint": "可选。留空以使用默认值。",
+          "settings.defaultModelLabel": "默认模型名称",
+          "settings.defaultModelPlaceholder": "例如：gpt-4o",
+          "settings.defaultModelHint": "可选。用于聊天的默认模型。",
+          "settings.apiKeyLabel": "API 密钥",
+          "settings.apiKeyPlaceholder": "输入您的 API 密钥",
+          "settings.apiKeyPlaceholderUpdate": "输入新密钥以更新，留空以保留当前密钥",
+         "settings.apiKeyHint": "可选。您用于该服务的个人 API 密钥。",
+          "settings.apiKeyHintUpdate": "当前已设置 API 密钥。输入新密钥以替换它，或留空以保留现有密钥。",
+         "settings.resetButton": "重置",
+         "settings.saveButton": "保存更改",
+          "settings.saving": "保存中...",
+          "settings.saveSuccess": "设置已成功保存！",
+          "settings.saveError": "保存设置时出错",
+          "settings.loadingConfig": "正在加载配置...",
+          "settings.loadingError": "加载配置时出错",
+          // 个性化页面
+          "personalizationPage.title": "个性化（记忆）",
+          "personalizationPage.tabs.memory": "结构化记忆",
+          "personalizationPage.tabs.knowledge": "知识库",
+          "personalizationPage.tabs.prompt": "自定义指令",
+          // 结构化记忆选项卡
+          "personalizationPage.memory.title": "管理结构化记忆",
+          "personalizationPage.memory.addTitle": "添加新条目",
+          "personalizationPage.memory.keyPlaceholder": "输入键",
+          "personalizationPage.memory.valuePlaceholder": "输入值（字符串或 JSON）",
+          "personalizationPage.memory.addButton": "添加条目",
+          "personalizationPage.memory.addingButton": "添加中...",
+          "personalizationPage.memory.loading": "正在加载记忆条目...",
+          "personalizationPage.memory.errorLoading": "加载记忆条目时出错。",
+          "personalizationPage.memory.errorAdding": "添加记忆条目时出错。",
+          "personalizationPage.memory.errorEmptyFields": "键和值不能为空。",
+          "personalizationPage.memory.noEntries": "未找到记忆条目。",
+          "personalizationPage.memory.tableHeaderKey": "键",
+          "personalizationPage.memory.tableHeaderValue": "值",
+          "personalizationPage.memory.tableHeaderActions": "操作",
+          "personalizationPage.memory.editButton": "编辑",
+          "personalizationPage.memory.deleteButton": "删除",
+          "personalizationPage.memory.saveButton": "保存",
+          "personalizationPage.memory.savingButton": "保存中...",
+          "personalizationPage.memory.cancelButton": "取消",
+          "personalizationPage.memory.deletingButton": "删除中...",
+          "personalizationPage.memory.errorUpdating": "更新记忆条目时出错。",
+          "personalizationPage.memory.errorDeleting": "删除记忆条目时出错。",
+          "personalizationPage.memory.deleteConfirmation": "确定要删除键为 \"{{key}}\" 的记忆条目吗？",
+          // 知识库选项卡
+          "personalizationPage.knowledge.title": "管理知识库",
+          "personalizationPage.knowledge.loading": "正在加载文档...",
+          "personalizationPage.knowledge.errorLoading": "加载文档时出错。",
+          "personalizationPage.knowledge.noDocuments": "未找到文档。",
+          "personalizationPage.knowledge.tableHeaderFilename": "文件名",
+          "personalizationPage.knowledge.tableHeaderStatus": "状态",
+          "personalizationPage.knowledge.tableHeaderUploadedAt": "上传时间",
+          "personalizationPage.knowledge.tableHeaderActions": "操作",
+          "personalizationPage.knowledge.status.pending": "待处理",
+          "personalizationPage.knowledge.status.processing": "处理中",
+          "personalizationPage.knowledge.status.completed": "已完成",
+          "personalizationPage.knowledge.status.failed": "失败",
+          "personalizationPage.knowledge.deleteButton": "删除",
+          "personalizationPage.knowledge.deletingButton": "删除中...",
+          "personalizationPage.knowledge.errorDeleting": "删除文档时出错。",
+          "personalizationPage.knowledge.deleteConfirmation": "确定要删除文档 \"{{filename}}\" 吗？",
+          // 自定义指令选项卡
+          "personalizationPage.prompt.title": "自定义系统指令",
+          "personalizationPage.prompt.description": "输入自定义的系统指令，AI 助手将在对话中使用该指令。留空则使用默认指令。",
+          "personalizationPage.prompt.placeholder": "在此输入您的自定义指令...",
+          "personalizationPage.prompt.loading": "正在加载自定义指令...",
+          "personalizationPage.prompt.errorLoading": "加载自定义指令时出错。",
+          "personalizationPage.prompt.saveButton": "保存指令",
+          "personalizationPage.prompt.savingButton": "保存中...",
+          "personalizationPage.prompt.saveSuccess": "自定义指令已成功保存！",
+          "personalizationPage.prompt.errorSaving": "保存自定义指令时出错。",
+       }
+     }
+   }
   });
 
 export default i18n;

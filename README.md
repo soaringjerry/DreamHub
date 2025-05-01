@@ -11,6 +11,12 @@ DreamHub 是一个 AI 驱动的工作站/工作面板后端服务，旨在通过
 *   **对话历史记忆:** 记录多轮对话上下文（基于 `conversation_id` 和 `user_id`），存储在 PostgreSQL 中，通过 `ChatRepository` 进行管理，实现更连贯的 AI 交互。
 *   **基础 API:** 提供文件上传 (`/api/v1/upload`)、聊天交互 (`/api/v1/chat`)、文档管理 (`/api/v1/documents`) 和任务状态查询 (`/api/v1/tasks/{task_id}/status`) 的 API 端点。详细 API 文档请参考 [API_DOCS.md](Docs/API_DOCS.md)。
 *   **前端界面:** 提供了一个基于 React 的用户界面，用于文件上传、聊天交互和对话管理。详细前端文档请参考 [frontend/FRONTEND_DOCS.md](frontend/FRONTEND_DOCS.md)。
+*   **用户配置:** 允许用户自定义应用设置（例如 API 密钥），存储在数据库中。
+*   **云端对话历史:** 对话记录现在存储在云端数据库中，支持跨设备同步和检索。
+*   **结构化记忆:** 允许用户或 AI 以键值对形式存储和检索特定信息片段，增强个性化和上下文理解。
+*   **知识库管理增强:** 提供了列出和删除已上传文档的功能。
+*   **个性化界面:** 新增设置页面和个性化（记忆管理）页面。
+*   **自定义 Prompt (通过配置):** 用户可以通过配置接口影响 AI 的行为（具体实现可能依赖配置项）。
 
 ## 文档说明
 
@@ -123,8 +129,8 @@ graph TD
     *   数据库: `dreamhub_db`
     *   用户名: `postgres`
     *   密码: (您在步骤 2 中设置的密码)
-    打开并执行项目根目录下的 `init_db.sql` 文件中的所有 SQL 语句。这个脚本会启用 `vector` 扩展并创建所有必需的表和索引（包括 `conversation_history`, `documents`, `tasks`, 和 `langchain_pg_embedding`）。
-    **警告:** 该脚本会执行 `DROP TABLE IF EXISTS langchain_pg_embedding;` 来确保向量维度正确，请在已有重要数据的数据库上谨慎操作或先备份！
+    连接到数据库后，需要运行数据库迁移脚本来创建或更新表结构。推荐使用数据库迁移工具（如果项目已集成，例如 `migrate` 或 `goose`），或者按顺序手动执行 `migrations/` 目录下的 `.up.sql` 文件（例如 `001_...up.sql`, `002_...up.sql`, `003_...up.sql` 等）。
+    **注意:** 迁移脚本会管理数据库模式的演进。请确保按照正确的顺序应用它们。
 
 4.  **创建 `.env` 文件:**
     复制根目录下的 `.env.example` 文件为 `.env`，并根据您的环境填入必要的值，特别是 `OPENAI_API_KEY` 和 `DATABASE_URL` (确保密码正确)。
@@ -175,7 +181,7 @@ graph TD
 
 ## API 用法示例
 
-使用 `curl` 或 Postman 等工具与 API 交互。所有 API 路径均以 `/api/v1` 为前缀。完整 API 文档请参考 [API_DOCS.md](Docs/API_DOCS.md)。
+使用 `curl` 或 Postman 等工具与 API 交互。所有 API 路径均以 `/api/v1` 为前缀。以下是一些核心流程的示例。有关所有端点（包括用户配置、结构化记忆、对话列表、文档删除等）的完整文档和示例，请参考 [API_DOCS.md](Docs/API_DOCS.md)。
 
 ### 1. 上传文件 (触发 Embedding)
 
@@ -338,13 +344,13 @@ graph TD
 *   **用户 ID 传递:** 虽然 Context 用于在内部传递 `user_id`，但从 API 入口到 Context 的设置依赖临时方案。
 *   **任务状态查询:** `/tasks/{task_id}/status` API 依赖的 `TaskRepository` 按 Asynq Task ID 查询的功能尚未完全实现。
 *   **LLM 流式处理:** `ChatService` 中的流式接口依赖的 `LLMProvider.GenerateContentStream` 可能因 `langchaingo` API 问题无法正常工作，需要进一步调试或寻找替代方案。
-*   **RAG 与对话摘要:** 相关 Service (`RAGService`, `MemoryService`) 尚未实现。
+*   **高级 RAG 与对话摘要:** 基础 RAG（基于上传文档）和结构化记忆已实现，但更高级的 RAG 策略和自动对话摘要功能尚未实现。
 *   **WebSocket:** 实时通信功能尚未实现。
-*   **文本分割器:** `EmbeddingTaskHandler` 中目前使用的是临时的简单分割逻辑，需要替换为 `langchaingo/textsplitter`。
+*   **文本分割器:** `EmbeddingTaskHandler` 中目前使用的是临时的简单分割逻辑，需要替换为更优化的 `langchaingo/textsplitter`。
 *   **错误处理与韧性:** 统一错误处理中间件已添加，但 Service 和 Repository 中的错误处理、重试、限流等机制尚不完善。
-*   **配置:** 部分参数（如文本分割器参数、历史消息数）仍为硬编码，需要移至配置。
+*   **配置:** 虽然添加了用户配置 API，但系统中可能仍有部分参数（如文本分割器参数、默认历史消息数）为硬编码，需要进一步移至配置或数据库。
 *   **测试:** 缺乏单元测试和集成测试。
-*   **向量插入问题 (服务器环境):** 在服务器环境部署时，使用 `pgx.CopyFrom` 批量插入向量到 `langchain_pg_embedding` 表时，即使数据库模式 (`vector(1536)`) 和向量维度 (1536) 均正确，仍可能遇到 `ERROR: vector cannot have more than 16000 dimensions` 的运行时错误。本地环境（相同版本）可能不会出现此问题。根本原因推测与服务器环境下 `pgx` 对 `vector` 类型的处理（尤其是在 `CopyFrom` 的二进制协议中，可能与类型注册失败有关）存在问题。**临时解决方案:** 已将 `internal/repository/pgvector/vector_repo_impl.go` 中的 `AddChunks` 函数修改为使用逐条 `INSERT` 语句，这解决了运行时错误，但可能会带来性能影响，尤其是在处理包含大量块的文档时。未来可考虑升级 `pgvector-go` 和 `pgx` 依赖，尝试恢复使用 `CopyFrom`。
+*   **向量插入问题 (服务器环境):** （保持不变）在服务器环境部署时...（省略详细信息）...未来可考虑升级 `pgvector-go` 和 `pgx` 依赖，尝试恢复使用 `CopyFrom`。
 
 ## 后续开发计划
 

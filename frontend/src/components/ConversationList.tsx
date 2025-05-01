@@ -1,28 +1,26 @@
-import React, { useMemo } from 'react'; // Import useMemo
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useChatStore,
-  // useConversationList, // No longer using this selector directly
   useActiveConversationId,
+  useSortedConversations, // Import the new selector
+  useIsConversationListLoading, // Import loading state selector
+  useConversationListError, // Import error state selector
 } from '../store/chatStore';
-import { MessageSquare, PlusSquare, Trash2 } from 'lucide-react';
+import { MessageSquare, PlusSquare, Trash2, Loader2, AlertCircle } from 'lucide-react'; // Import icons
 
 const ConversationList: React.FC = () => {
   const { t } = useTranslation();
-  // Get the raw conversations object and active ID
-  const conversationsRecord = useChatStore((state) => state.conversations);
+  // Use the new selectors
+  const sortedConversations = useSortedConversations();
+  const isLoading = useIsConversationListLoading();
+  const error = useConversationListError();
   const activeConversationId = useActiveConversationId();
   // Get actions
   const switchConversation = useChatStore((state) => state.switchConversation);
   const startNewConversation = useChatStore((state) => state.startNewConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
-
-  // Compute the sorted list using useMemo
-  const sortedConversations = useMemo(() => {
-    return Object.values(conversationsRecord)
-      .map(({ id, title, createdAt, lastUpdatedAt }) => ({ id, title, createdAt, lastUpdatedAt }))
-      .sort((a, b) => b.lastUpdatedAt - a.lastUpdatedAt); // Sort by last updated desc
-  }, [conversationsRecord]); // Recompute only when the conversationsRecord object changes
+  const fetchConversations = useChatStore((state) => state.fetchConversations); // Get fetch action for retry
 
   const handleNewConversation = () => {
     startNewConversation();
@@ -50,13 +48,30 @@ const ConversationList: React.FC = () => {
         </button>
       </div>
 
-      {/* Conversation List */}
-      <div className="flex-grow overflow-y-auto">
-        {sortedConversations.length === 0 ? ( // Use sortedConversations
-          <p className="p-4 text-xs text-center text-gray-500 dark:text-gray-400">{t('noConversations', 'No conversations yet.')}</p>
+      {/* Conversation List Area */}
+      <div className="flex-grow overflow-y-auto p-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+            <span className="ml-2 text-xs text-gray-500">{t('loadingConversations', 'Loading...')}</span>
+          </div>
+        ) : error ? (
+          <div className="p-3 text-center text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded border border-red-200 dark:border-red-700/50">
+            <AlertCircle className="h-4 w-4 inline-block mr-1 mb-0.5" />
+            <p className="text-xs font-medium mb-1">{t('errorLoadingConversationsTitle', 'Error Loading Conversations')}</p>
+            <p className="text-xs mb-2">{error}</p>
+            <button
+              onClick={() => fetchConversations()} // Retry button
+              className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-800/50 text-red-700 dark:text-red-300 rounded hover:bg-red-200 dark:hover:bg-red-700/50"
+            >
+              {t('retry', 'Retry')}
+            </button>
+          </div>
+        ) : sortedConversations.length === 0 ? (
+          <p className="pt-4 text-xs text-center text-gray-500 dark:text-gray-400">{t('noConversations', 'No conversations yet.')}</p>
         ) : (
-          <ul className="p-2 space-y-1">
-            {sortedConversations.map((conv) => ( // Use sortedConversations
+          <ul className="space-y-1">
+            {sortedConversations.map((conv) => (
               <li key={conv.id}>
                 <button
                   onClick={() => switchConversation(conv.id)}

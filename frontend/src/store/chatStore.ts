@@ -1,129 +1,151 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware'; // 导入 persist 中间件
+import { create, StateCreator } from 'zustand'; // Import StateCreator
+import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware'; // Import PersistOptions
 import { v4 as uuidv4 } from 'uuid';
-import { sendMessage as sendMessageApi, uploadFile as uploadFileApi } from '../services/api';
+import {
+  sendMessage as sendMessageApi,
+  uploadFile as uploadFileApi,
+  getUserConversations,
+  getConversationMessages,
+  ConversationInfo,
+  Message as ApiMessage
+} from '../services/api';
 
-// --- 类型定义 ---
+// --- Type Definitions (Aligned with backend/api.ts) ---
 
-// 单条消息
-interface Message {
-  sender: 'user' | 'ai';
+export interface Message {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
   content: string;
-  timestamp: number; // 添加时间戳
+  created_at: string; // ISO string format
 }
 
-// 单个对话的数据结构
-interface Conversation {
+export interface Conversation {
   id: string;
   title: string;
   messages: Message[];
-  createdAt: number;
-  lastUpdatedAt: number; // 添加最后更新时间戳，用于排序
-  // 可以添加其他元数据，如关联的文件 ID 等
+  createdAt: string; // ISO string format
+  updatedAt: string; // ISO string format
 }
 
-// 上传的文件信息 (保持不变)
 interface UploadedFile {
   name: string;
   size: number;
   id: string; // task_id
 }
 
-// Store 状态类型
+// Store State Type
 interface ChatState {
   userId: string | null;
-  conversations: Record<string, Conversation>; // 存储所有对话 { [conversationId]: Conversation }
-  activeConversationId: string | null; // 当前活动的对话 ID
-  // 将 loading 和 error 移到 conversation 内部，实现更精细控制
-  // isLoading: boolean;
-  // error: string | null;
-  isUploading: boolean; // 上传状态是全局的
-  uploadError: string | null; // 上传错误是全局的
-  uploadedFiles: UploadedFile[]; // 已上传文件列表是全局的
-  // 用于跟踪特定对话的加载和错误状态
-  conversationStatus: Record<string, { isLoading: boolean; error: string | null }>;
+  conversations: Record<string, Conversation>;
+  activeConversationId: string | null;
+  isUploading: boolean;
+  uploadError: string | null;
+  uploadedFiles: UploadedFile[];
+  conversationStatus: Record<string, { isLoading: boolean; error: string | null; hasLoadedMessages: boolean }>;
+  isConversationListLoading: boolean;
+  conversationListError: string | null;
 }
 
-// Store 操作类型
+// Store Actions Type
 interface ChatActions {
   setUserId: (userId: string | null) => void;
-  startNewConversation: (title?: string) => string; // 创建新对话，可选标题，返回 ID
-  switchConversation: (conversationId: string | null) => void; // 切换活动对话
-  deleteConversation: (conversationId: string) => void; // 删除对话
-  renameConversation: (conversationId: string, newTitle: string) => void; // 重命名对话
-  addMessage: (conversationId: string, message: Omit<Message, 'timestamp'>) => void; // 向指定对话添加消息
-  sendMessage: (userMessage: string) => Promise<void>; // 发送消息（处理活动对话）
-  uploadFile: (file: File) => Promise<void>; // 上传文件
-  setConversationStatus: (conversationId: string, status: Partial<{ isLoading: boolean; error: string | null }>) => void; // 设置特定对话的状态
-  // 全局状态设置
+  startNewConversation: () => void;
+  switchConversation: (conversationId: string | null) => void;
+  deleteConversation: (conversationId: string) => void;
+  renameConversation: (conversationId: string, newTitle: string) => void;
+  addMessage: (conversationId: string, message: Message) => void;
+  sendMessage: (userMessage: string) => Promise<void>;
+  uploadFile: (file: File) => Promise<void>;
+  setConversationStatus: (conversationId: string, status: Partial<{ isLoading: boolean; error: string | null; hasLoadedMessages: boolean }>) => void;
+  setIsConversationListLoading: (isLoading: boolean) => void;
+  setConversationListError: (error: string | null) => void;
+  fetchConversations: () => Promise<void>;
+  fetchMessages: (conversationId: string) => Promise<void>;
   setUploading: (uploading: boolean) => void;
   setUploadError: (error: string | null) => void;
   addUploadedFile: (file: UploadedFile) => void;
-  clearAllConversations: () => void; // 清空所有对话记录 (可选)
+  clearAllConversations: () => void;
 }
 
-// --- Zustand Store 实现 (使用 persist 中间件) ---
-export const useChatStore = create<ChatState & ChatActions>()(
+// Combine State and Actions for the store type
+type ChatStore = ChatState & ChatActions;
+
+// Define the state creator function with explicit types for set and get
+type ChatStateCreator = StateCreator<
+  ChatStore,
+  [], // No non-middleware mutators like devtools
+  [['zustand/persist', unknown]] // Middleware types
+>;
+
+// Define the shape of the state that will be persisted
+interface PersistedChatState {
+  userId: string | null;
+  activeConversationId: string | null;
+  uploadedFiles: UploadedFile[];
+}
+
+// Define persist options with explicit type for the persisted state shape
+const persistOptions: PersistOptions<ChatStore, PersistedChatState> = {
+  name: 'chat-storage', // localStorage key
+  storage: createJSONStorage(() => localStorage),
+  // Persist only non-volatile state
+  partialize: (state: ChatStore): PersistedChatState => ({ // Return the defined persisted shape
+    userId: state.userId,
+    activeConversationId: state.activeConversationId,
+    uploadedFiles: state.uploadedFiles,
+  }),
+};
+
+// --- Zustand Store Implementation ---
+export const useChatStore = create<ChatStore>()( // Use combined type
   persist(
-    (set, get) => ({
-      // --- 初始状态 ---
+    (set, get): ChatStore => ({ // Ensure return type matches ChatStore
+      // --- Initial State (implements ChatState) ---
       userId: null,
       conversations: {},
       activeConversationId: null,
-      conversationStatus: {}, // 初始化为空对象
+      conversationStatus: {},
       isUploading: false,
       uploadError: null,
       uploadedFiles: [],
+      isConversationListLoading: false,
+      conversationListError: null,
 
-      // --- 操作实现 ---
-      setUserId: (userId) => set({ userId: userId }),
+      // --- Actions Implementation (implements ChatActions) ---
+      setUserId: (userId: string | null) => set({ userId: userId }), // Add type
 
-      startNewConversation: (title) => {
-        const newConversationId = uuidv4();
-        const now = Date.now();
-        const newConversation: Conversation = {
-          id: newConversationId,
-          title: title || `New Chat ${Object.keys(get().conversations).length + 1}`,
-          messages: [],
-          createdAt: now,
-          lastUpdatedAt: now,
-        };
-        set((state) => ({
-          conversations: {
-            ...state.conversations,
-            [newConversationId]: newConversation,
-          },
-          conversationStatus: {
-            ...state.conversationStatus,
-            [newConversationId]: { isLoading: false, error: null }, // 初始化状态
-          },
-          activeConversationId: newConversationId, // 设为活动对话
-        }));
-        console.log("Started new conversation:", newConversationId);
-        return newConversationId;
+      startNewConversation: () => {
+          set({ activeConversationId: null });
+          console.log("Set state for new conversation (will be created on first message)");
       },
 
-      switchConversation: (conversationId) => {
-        if (conversationId === get().activeConversationId) return; // 如果已经是活动对话，则不处理
+      switchConversation: (conversationId: string | null) => { // Add type
+        const { activeConversationId, conversations, conversationStatus } = get(); // fetchMessages is an action, access via get() if needed inside
+        if (conversationId === activeConversationId) return;
 
-        if (conversationId === null || get().conversations[conversationId]) {
+        if (conversationId === null || conversations[conversationId]) {
           set({ activeConversationId: conversationId });
           console.log("Switched to conversation:", conversationId);
+
+          if (conversationId && (!conversationStatus[conversationId]?.hasLoadedMessages || conversations[conversationId]?.messages.length === 0)) {
+             if (!conversationStatus[conversationId]?.isLoading) {
+                console.log(`Messages for ${conversationId} not loaded, fetching...`);
+                get().fetchMessages(conversationId); // Call fetchMessages via get()
+             }
+          }
         } else {
           console.warn(`Attempted to switch to non-existent conversation: ${conversationId}`);
-          // 如果尝试切换到一个不存在的 ID，可以选择切换到 null 或第一个对话
           set({ activeConversationId: null });
         }
       },
 
-      deleteConversation: (conversationId) => {
-        set((state) => {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      deleteConversation: (conversationId: string) => { // Add type
+        console.warn("Frontend deleteConversation called, but backend deletion is not implemented yet.");
+        set((state: ChatStore) => { // Use combined type
           const { [conversationId]: _, ...remainingConversations } = state.conversations;
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { [conversationId]: __, ...remainingStatus } = state.conversationStatus;
           let newActiveId = state.activeConversationId;
-          // 如果删除的是当前活动对话，则切换到第一个或 null
           if (state.activeConversationId === conversationId) {
             const remainingIds = Object.keys(remainingConversations);
             newActiveId = remainingIds.length > 0 ? remainingIds[0] : null;
@@ -134,11 +156,12 @@ export const useChatStore = create<ChatState & ChatActions>()(
             activeConversationId: newActiveId,
           };
         });
-        console.log("Deleted conversation:", conversationId);
+        console.log("Deleted conversation locally:", conversationId);
       },
 
-       renameConversation: (conversationId, newTitle) => {
-         set(state => {
+       renameConversation: (conversationId: string, newTitle: string) => { // Add types
+         console.warn("Frontend renameConversation called, but backend renaming is not implemented yet.");
+         set((state: ChatStore) => { // Use combined type
            const conversation = state.conversations[conversationId];
            if (conversation && newTitle.trim()) {
              return {
@@ -147,222 +170,304 @@ export const useChatStore = create<ChatState & ChatActions>()(
                  [conversationId]: {
                    ...conversation,
                    title: newTitle.trim(),
-                   lastUpdatedAt: Date.now(),
+                   updatedAt: new Date().toISOString(),
                  }
                }
              }
            }
-           return {}; // No change if conversation not found or title is empty
+           return {};
          });
        },
 
-      addMessage: (conversationId, messageData) => {
-        set((state) => {
-          const targetConversation = state.conversations[conversationId];
-          if (!targetConversation) {
-            console.error(`Conversation ${conversationId} not found when adding message.`);
-            return {};
-          }
-          const newMessage: Message = {
-            ...messageData,
-            timestamp: Date.now(),
-          };
-          const updatedConversation: Conversation = {
-            ...targetConversation,
-            messages: [...targetConversation.messages, newMessage],
-            lastUpdatedAt: newMessage.timestamp, // 更新最后活动时间
-          };
-          return {
-            conversations: {
-              ...state.conversations,
-              [conversationId]: updatedConversation,
-            },
-          };
-        });
+       addMessage: (conversationId: string, message: Message) => { // Add type
+         set((state: ChatStore) => { // Use combined type
+           const targetConversation = state.conversations[conversationId];
+           if (!targetConversation) {
+             console.error(`Conversation ${conversationId} not found when adding message.`);
+             return {};
+           }
+           if (targetConversation.messages.some((m: Message) => m.id === message.id)) {
+             console.log(`Message ${message.id} already exists in conversation ${conversationId}. Skipping add.`);
+             return {};
+           }
+           const updatedMessages = [...targetConversation.messages, message].sort(
+             (a: Message, b: Message) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+           );
+           const latestTimestamp = message.created_at > targetConversation.updatedAt
+             ? message.created_at
+             : targetConversation.updatedAt;
+           const updatedConversation: Conversation = {
+             ...targetConversation,
+             messages: updatedMessages,
+             updatedAt: latestTimestamp,
+           };
+           return {
+             conversations: {
+               ...state.conversations,
+               [conversationId]: updatedConversation,
+             },
+           };
+         });
+       },
+
+       setConversationStatus: (conversationId: string, statusUpdate: Partial<{ isLoading: boolean; error: string | null; hasLoadedMessages: boolean }>) => { // Add type
+         set((state: ChatStore) => { // Use combined type
+           const currentStatus = state.conversationStatus[conversationId] || { isLoading: false, error: null, hasLoadedMessages: false };
+           return {
+             conversationStatus: {
+               ...state.conversationStatus,
+               [conversationId]: { ...currentStatus, ...statusUpdate },
+             },
+           };
+         });
+       },
+
+       setIsConversationListLoading: (isLoading: boolean) => set({ isConversationListLoading: isLoading }), // Add type
+       setConversationListError: (error: string | null) => set({ conversationListError: error }), // Add type
+
+       setUploading: (uploading: boolean) => set({ isUploading: uploading }), // Add type
+       setUploadError: (error: string | null) => set({ uploadError: error }), // Add type
+       addUploadedFile: (file: UploadedFile) => set((state: ChatStore) => ({ // Add type and use combined type
+         uploadedFiles: [...state.uploadedFiles, file]
+       })),
+
+      clearAllConversations: () => {
+          console.warn("Frontend clearAllConversations called, but backend clearing is not implemented yet.");
+          set({
+              conversations: {},
+              conversationStatus: {},
+              activeConversationId: null,
+              conversationListError: null,
+              isConversationListLoading: false,
+          });
+          console.log("Cleared local conversations.");
       },
 
-      setConversationStatus: (conversationId, statusUpdate) => {
-        set((state) => {
-          const currentStatus = state.conversationStatus[conversationId] || { isLoading: false, error: null };
-          return {
-            conversationStatus: {
-              ...state.conversationStatus,
-              [conversationId]: { ...currentStatus, ...statusUpdate },
-            },
-          };
-        });
+      fetchConversations: async () => {
+        // Access actions via get()
+        get().setIsConversationListLoading(true);
+        get().setConversationListError(null);
+        console.log("Fetching conversations...");
+        try {
+          const conversationInfos: ConversationInfo[] = await getUserConversations();
+          const newConversations: Record<string, Conversation> = {};
+          const newConversationStatus: Record<string, { isLoading: boolean; error: string | null; hasLoadedMessages: boolean }> = {};
+
+          conversationInfos.forEach((info: ConversationInfo) => {
+            newConversations[info.id] = {
+              id: info.id,
+              title: info.title,
+              messages: [],
+              createdAt: info.created_at,
+              updatedAt: info.updated_at,
+            };
+            newConversationStatus[info.id] = { isLoading: false, error: null, hasLoadedMessages: false };
+          });
+
+          set((state: ChatStore) => ({ // Use combined type
+            conversations: newConversations,
+            conversationStatus: { ...state.conversationStatus, ...newConversationStatus },
+            isConversationListLoading: false,
+          }));
+          console.log(`Fetched and updated ${Object.keys(newConversations).length} conversations.`);
+
+        } catch (error) {
+          console.error("Failed to fetch conversations:", error);
+          const errorMsg = error instanceof Error ? error.message : "Unknown error fetching conversations";
+          get().setConversationListError(errorMsg); // Use get()
+          get().setIsConversationListLoading(false); // Use get()
+        }
       },
 
-      // 全局状态设置
-      setUploading: (uploading) => set({ isUploading: uploading }),
-      setUploadError: (error) => set({ uploadError: error }),
-      addUploadedFile: (file) => set((state) => ({
-        uploadedFiles: [...state.uploadedFiles, file]
-      })),
+      fetchMessages: async (conversationId: string) => { // Add type
+        get().setConversationStatus(conversationId, { isLoading: true, error: null }); // Use get()
+        console.log(`Fetching messages for conversation ${conversationId}...`);
+        try {
+          const apiMessages: ApiMessage[] = await getConversationMessages(conversationId);
+          const localMessages: Message[] = apiMessages.map((m: ApiMessage) => ({
+            id: m.id,
+            conversation_id: m.conversation_id,
+            role: m.role,
+            content: m.content,
+            created_at: m.created_at,
+          }));
 
-      clearAllConversations: () => set({
-          conversations: {},
-          conversationStatus: {},
-          activeConversationId: null,
-      }),
+          set((state: ChatStore) => { // Use combined type
+              const targetConversation = state.conversations[conversationId];
+              if (!targetConversation) {
+                  console.warn(`Conversation ${conversationId} not found in state during fetchMessages completion.`);
+                  return {};
+              }
+              const latestMessageTime = localMessages.reduce((latest, msg) => {
+                  return msg.created_at > latest ? msg.created_at : latest;
+              }, targetConversation.updatedAt);
 
-      // --- sendMessage (重构后) ---
-      sendMessage: async (userMessage) => {
-        const { userId, activeConversationId, startNewConversation, addMessage, setConversationStatus, renameConversation } = get();
+              return {
+                  conversations: {
+                      ...state.conversations,
+                      [conversationId]: {
+                          ...targetConversation,
+                          messages: localMessages,
+                          updatedAt: latestMessageTime,
+                      }
+                  }
+              }
+          })
+
+          get().setConversationStatus(conversationId, { isLoading: false, hasLoadedMessages: true }); // Use get()
+          console.log(`Fetched ${localMessages.length} messages for conversation ${conversationId}`);
+
+        } catch (error) {
+          console.error(`Failed to fetch messages for ${conversationId}:`, error);
+          const errorMsg = error instanceof Error ? error.message : "Unknown error fetching messages";
+          get().setConversationStatus(conversationId, { isLoading: false, error: errorMsg, hasLoadedMessages: false }); // Use get()
+        }
+      },
+
+      sendMessage: async (userMessage: string) => { // Add type
+        const { userId, activeConversationId } = get(); // Get state parts needed initially
 
         if (!userId) {
           console.error("User ID is missing. Cannot send message.");
-          // 如何处理错误？可以设置一个全局错误状态或特定对话的错误
-          // 暂时不设置，依赖 UI 层检查 userId
           return;
         }
 
-        let targetConversationId = activeConversationId;
-        let isNewConversation = false;
+        const currentConversationId = activeConversationId;
 
-        // 如果没有活动对话，创建一个新的
-        if (!targetConversationId) {
-          targetConversationId = startNewConversation(); // 创建并设为活动
-          isNewConversation = true;
-          console.log("No active conversation, started new one:", targetConversationId);
+        if (currentConversationId) {
+             get().setConversationStatus(currentConversationId, { isLoading: true, error: null }); // Use get()
+             console.log(`Sending message to existing conversation: ${currentConversationId}`);
+        } else {
+            console.log("Sending first message for a new conversation...");
         }
-
-        // 确保 ID 有效
-        if (!targetConversationId) {
-          console.error("Failed to get or create a conversation ID.");
-          // 设置全局错误？
-          return;
-        }
-
-        // 如果是新对话，用第一条消息设置标题
-        if (isNewConversation) {
-            const newTitle = userMessage.substring(0, 30) + (userMessage.length > 30 ? '...' : '');
-            renameConversation(targetConversationId, newTitle);
-        }
-
-
-        // 1. 添加用户消息 & 设置状态
-        addMessage(targetConversationId, { sender: 'user', content: userMessage });
-        setConversationStatus(targetConversationId, { isLoading: true, error: null });
 
         try {
-          // 2. 调用 API (Remove userId argument)
-          const response = await sendMessageApi(userMessage, targetConversationId);
+          const response = await sendMessageApi(userMessage, currentConversationId ?? undefined);
+          const returnedConversationId = response.conversation_id;
+          console.log(`API responded for conversation: ${returnedConversationId}`);
 
-          // 确认返回的 ID (理论上应该匹配)
-          if (response.conversation_id !== targetConversationId) {
-            console.warn(`API returned different conversation ID: expected ${targetConversationId}, got ${response.conversation_id}`);
-            // 可以选择信任 API 返回的 ID
-            // targetConversationId = response.conversation_id;
+          if (!currentConversationId) {
+            console.log(`New conversation ${returnedConversationId} created by backend.`);
+            await get().fetchConversations(); // Use get()
+            set({ activeConversationId: returnedConversationId });
+            await get().fetchMessages(returnedConversationId); // Use get()
+          } else {
+            if (returnedConversationId !== currentConversationId) {
+              console.warn(`API returned different conversation ID (${returnedConversationId}) than expected (${currentConversationId}). Refreshing list and switching.`);
+              await get().fetchConversations(); // Use get()
+              set({ activeConversationId: returnedConversationId });
+              await get().fetchMessages(returnedConversationId); // Use get()
+            } else {
+              console.log(`Fetching updated messages for ${currentConversationId}...`);
+              await get().fetchMessages(currentConversationId); // Use get()
+            }
           }
-
-          // 3. 添加 AI 回复
-          addMessage(targetConversationId, { sender: 'ai', content: response.reply });
 
         } catch (err) {
           console.error("Error in sendMessage store action:", err);
           const errorMsg = err instanceof Error ? err.message : '发送消息时发生未知错误';
-          setConversationStatus(targetConversationId, { error: errorMsg });
-          // 添加错误消息到 UI
-          addMessage(targetConversationId, { sender: 'ai', content: `错误: ${errorMsg}` });
+          if (currentConversationId) {
+            get().setConversationStatus(currentConversationId, { error: errorMsg, isLoading: false }); // Use get()
+          } else {
+              get().setConversationListError(`Failed to start conversation: ${errorMsg}`); // Use get()
+              console.error("Error sending first message:", errorMsg);
+          }
         } finally {
-          setConversationStatus(targetConversationId, { isLoading: false });
+           const finalActiveId = get().activeConversationId;
+           if (finalActiveId && get().conversationStatus[finalActiveId]) {
+               get().setConversationStatus(finalActiveId, { isLoading: false }); // Use get()
+           }
+           console.log("sendMessage finished.");
         }
       },
 
-      // --- uploadFile (重构后) ---
-      uploadFile: async (file) => {
-        const { userId, activeConversationId, addMessage, setUploading, setUploadError, addUploadedFile, startNewConversation } = get();
+      uploadFile: async (file: File) => { // Add type
+        const { userId, activeConversationId } = get(); // Get state parts needed initially
 
         if (!userId) {
-          setUploadError("User ID is missing. Cannot upload file.");
+          get().setUploadError("User ID is missing. Cannot upload file."); // Use get()
           return;
         }
 
-        let targetConversationId = activeConversationId;
-        // 如果没有活动对话，创建一个新的用于显示上传状态消息
-        if (!targetConversationId) {
-            targetConversationId = startNewConversation("File Upload Status"); // 给个默认标题
-            console.log("No active conversation for upload message, started new one:", targetConversationId);
-        }
+        const targetConversationId = activeConversationId;
 
-        if (!targetConversationId) {
-            console.error("Failed to get or create a conversation ID for upload message.");
-            setUploadError("Failed to determine conversation for status message.");
-            return;
-        }
-
-        setUploading(true);
-        setUploadError(null);
+        get().setUploading(true); // Use get()
+        get().setUploadError(null); // Use get()
+        console.log(`Uploading file: ${file.name}`);
 
         try {
-          // Call uploadFileApi (Remove userId argument)
           const response = await uploadFileApi(file);
+          console.log("File upload API success:", response);
 
-          addUploadedFile({
+          get().addUploadedFile({ // Use get()
             name: file.name,
             size: file.size,
             id: response.task_id
           });
 
-          // 上传成功消息添加到目标对话
-          addMessage(targetConversationId, { sender: 'ai', content: `文件 "${response.filename}" 已接受处理。 ${response.message}` });
+          const successMsg = `文件 "${response.filename}" 已接受处理。 ${response.message}`;
+          if (targetConversationId) {
+            console.log(`Upload successful. Refreshing messages for conversation ${targetConversationId} to show status.`);
+            await get().fetchMessages(targetConversationId); // Use get()
+          } else {
+            console.log("Global upload success (no active conversation):", successMsg);
+          }
 
         } catch (err) {
           console.error("Error in uploadFile store action:", err);
           const errorMsg = err instanceof Error ? err.message : '上传文件时发生未知错误';
-          setUploadError(errorMsg); // 设置全局上传错误
-          // 上传失败消息添加到目标对话
-          addMessage(targetConversationId, { sender: 'ai', content: `文件上传失败: ${errorMsg}` });
+          get().setUploadError(errorMsg); // Use get()
+
+          const failureMsg = `文件上传失败: ${errorMsg}`;
+           if (targetConversationId) {
+            console.log(`Upload failed. Refreshing messages for conversation ${targetConversationId} in case of error message.`);
+             await get().fetchMessages(targetConversationId); // Use get()
+             get().setConversationStatus(targetConversationId, { error: `Upload failed: ${errorMsg}` }); // Use get()
+          } else {
+             console.log("Global upload failure (no active conversation):", failureMsg);
+          }
         } finally {
-          setUploading(false);
+          get().setUploading(false); // Use get()
+          console.log("uploadFile finished.");
         }
       },
     }),
-    {
-      name: 'chat-storage', // localStorage 中的 key
-      storage: createJSONStorage(() => localStorage), // 使用 localStorage
-      // 可以选择性地持久化部分状态
-      partialize: (state) => ({
-        userId: state.userId,
-        conversations: state.conversations,
-        activeConversationId: state.activeConversationId,
-        uploadedFiles: state.uploadedFiles, // 可能也需要持久化已上传文件列表
-      }),
-    }
+    persistOptions // Pass typed persist options
   )
 );
 
-// --- 选择器 (Selectors) ---
+// --- Selectors ---
 
-// 定义一个稳定的空数组引用
 const EMPTY_MESSAGES: Message[] = [];
-// 定义一个稳定的默认状态对象引用
-const DEFAULT_CONVERSATION_STATUS = { isLoading: false, error: null };
+const DEFAULT_CONVERSATION_STATUS = { isLoading: false, error: null, hasLoadedMessages: false };
 
-// 获取当前活动对话的 ID
+export const useUserId = () => useChatStore((state) => state.userId);
 export const useActiveConversationId = () => useChatStore((state) => state.activeConversationId);
-
-// 获取当前活动对话的完整数据
-export const useActiveConversation = () => useChatStore((state) =>
+export const useActiveConversation = () => useChatStore((state: ChatStore) =>
   state.activeConversationId ? state.conversations[state.activeConversationId] : null
 );
-
-// 获取当前活动对话的消息列表
-export const useActiveMessages = () => useChatStore((state) =>
+export const useActiveMessages = () => useChatStore((state: ChatStore) =>
   state.activeConversationId
-    ? state.conversations[state.activeConversationId]?.messages ?? EMPTY_MESSAGES // 返回常量空数组
-    : EMPTY_MESSAGES // 返回常量空数组
+    ? state.conversations[state.activeConversationId]?.messages ?? EMPTY_MESSAGES
+    : EMPTY_MESSAGES
 );
-
-// 获取特定对话的状态 (Loading 和 Error)
-export const useConversationStatus = (conversationId: string | null) => useChatStore((state) =>
-  conversationId ? state.conversationStatus[conversationId] ?? { isLoading: false, error: null } : { isLoading: false, error: null }
+export const useConversationStatus = (conversationId: string | null) => useChatStore((state: ChatStore) =>
+  conversationId
+    ? state.conversationStatus[conversationId] ?? DEFAULT_CONVERSATION_STATUS
+    : DEFAULT_CONVERSATION_STATUS
 );
-
-// 获取当前活动对话的状态
-export const useActiveConversationStatus = () => useChatStore((state) =>
+export const useActiveConversationStatus = () => useChatStore((state: ChatStore) =>
     state.activeConversationId
-        ? state.conversationStatus[state.activeConversationId] ?? DEFAULT_CONVERSATION_STATUS // 返回常量默认状态
-        : DEFAULT_CONVERSATION_STATUS // 返回常量默认状态
+        ? state.conversationStatus[state.activeConversationId] ?? DEFAULT_CONVERSATION_STATUS
+        : DEFAULT_CONVERSATION_STATUS
 );
+export const useIsConversationListLoading = () => useChatStore((state) => state.isConversationListLoading);
+export const useConversationListError = () => useChatStore((state) => state.conversationListError);
+export const useSortedConversations = () => useChatStore((state: ChatStore) =>
+  Object.values(state.conversations).sort((a: Conversation, b: Conversation) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+);
+export const useIsUploading = () => useChatStore((state) => state.isUploading);
+export const useUploadError = () => useChatStore((state) => state.uploadError);
+export const useUploadedFiles = () => useChatStore((state) => state.uploadedFiles);

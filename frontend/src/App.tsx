@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom'; // Import Router components
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import i18n from './i18n';
-import { Moon, Sun, Languages, User, LogOut } from 'lucide-react'; // Removed Save import
-import { useAuthStore, useIsAuthenticated, useCurrentUser } from './store/authStore'; // Import auth store hooks
-// Removed chatStore import for userId as it's handled by authStore now
+import { Moon, Sun, Languages, User, LogOut, Settings, BrainCircuit } from 'lucide-react'; // Added Settings and BrainCircuit icons
+import { useAuthStore, useIsAuthenticated, useCurrentUser } from './store/authStore';
+import { useChatStore } from './store/chatStore';
 
 import FileUpload from './components/FileUpload';
 import ChatInterface from './components/ChatInterface';
 import ConversationList from './components/ConversationList';
 import LoginPage from './pages/LoginPage'; // Import Login Page
-import RegisterPage from './pages/RegisterPage'; // Import Register Page
-import ProtectedRoute from './components/ProtectedRoute'; // Import Protected Route
+import RegisterPage from './pages/RegisterPage';
+import SettingsPage from './pages/SettingsPage';
+import PersonalizationPage from './pages/PersonalizationPage'; // Import Personalization Page
+import ProtectedRoute from './components/ProtectedRoute';
 
 // Main application layout component
 const MainLayout: React.FC = () => {
@@ -72,7 +74,19 @@ function App() {
   const isAuthenticated = useIsAuthenticated();
   const currentUser = useCurrentUser();
   const logout = useAuthStore((state) => state.logout);
-  const navigate = useNavigate(); // Hook for programmatic navigation
+  const fetchConversations = useChatStore((state) => state.fetchConversations); // Get fetch action from correctly imported store
+  const navigate = useNavigate();
+
+  // Fetch conversations when user authenticates
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log("User authenticated, fetching conversations...");
+      fetchConversations();
+    }
+    // TODO: Consider what happens on logout? Should we clear conversations?
+    // The clearAllConversations action exists but needs backend integration.
+    // For now, fetching only happens on login/initial load when authenticated.
+  }, [isAuthenticated, fetchConversations]); // Re-run if auth state or fetch function changes
 
   // Theme initialization
   useEffect(() => {
@@ -133,10 +147,30 @@ function App() {
                 <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate" title={currentUser.username}>
                   {currentUser.username}
                 </span>
+                {/* Personalization Link */}
+                <Link
+                   to="/personalization"
+                   className="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary-500 flex-shrink-0"
+                   aria-label={t('header.personalizationLink')}
+                   title={t('header.personalizationLink')} // Tooltip
+                >
+                   <BrainCircuit size={14} />
+                </Link>
+                {/* Settings Link */}
+                <Link
+                  to="/settings"
+                  className="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary-500 flex-shrink-0"
+                  aria-label={t('header.settingsLink')}
+                  title={t('header.settingsLink')} // Tooltip
+                >
+                  <Settings size={14} />
+                </Link>
+                {/* Logout Button */}
                 <button
                   onClick={handleLogout}
                   className="p-1 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-primary-500 flex-shrink-0"
                   aria-label={t('auth.logoutButton')}
+                  title={t('auth.logoutButton')} // Tooltip
                 >
                   <LogOut size={14} />
                 </button>
@@ -183,9 +217,13 @@ function App() {
           <Route path="/" element={<ProtectedRoute />}>
               {/* Child route for the main authenticated layout */}
               <Route index element={<MainLayout />} />
+              {/* Settings Route */}
+              <Route path="settings" element={<SettingsPage />} />
+              {/* Personalization Route */}
+              <Route path="personalization" element={<PersonalizationPage />} />
               {/* Add other protected routes here if needed */}
-          </Route>
-          {/* Optional: Add a 404 Not Found route */}
+           </Route>
+           {/* Optional: Add a 404 Not Found route */}
           {/* <Route path="*" element={<NotFoundPage />} /> */}
       </Routes>
 

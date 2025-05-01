@@ -22,7 +22,10 @@ type ChatRepository interface {
 	// 需要确保实现中根据 ctx 中的 user_id 进行了过滤。
 	GetConversationHistory(ctx context.Context, conversationID uuid.UUID, lastN int) ([]*entity.Message, error)
 
+	// GetUserConversations 获取指定用户的所有对话基本信息。
+	// 按最后更新时间降序排序。
+	GetUserConversations(ctx context.Context, userID string) ([]*entity.Conversation, error)
+
 	// TODO: 可能需要添加其他方法，例如：
 	// DeleteMessagesByConversationID(ctx context.Context, conversationID uuid.UUID) error
-	// GetConversationsByUser(ctx context.Context, userID string, limit int, offset int) ([]*entity.ConversationSummary, error) // 需要 ConversationSummary 实体
 }

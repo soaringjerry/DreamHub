@@ -78,19 +78,25 @@ func main() {
 	vectorRepo := pgvector.NewPGVectorRepository(dbPool)
 	taskRepo := postgres.NewPostgresTaskRepository(dbPool)
 	// Access the underlying Pool from the custom DB type
-	userRepo := postgres.NewPostgresUserRepository(dbPool.Pool) // Initialize UserRepository
+	userRepo := postgres.NewPostgresUserRepository(dbPool.Pool)                 // Initialize UserRepository
+	configRepo := postgres.NewPostgresConfigRepository(dbPool.Pool)             // Initialize ConfigRepository
+	structuredMemoryRepo := postgres.NewStructuredMemoryRepository(dbPool.Pool) // Initialize StructuredMemoryRepository
 
 	// Initialize Services
 	ragService := service.NewRAGService(vectorRepo, embeddingProvider) // Initialize RAGService
 	// TODO: Initialize MemoryService when available
 	chatService := service.NewChatService(chatRepo, llmProvider, ragService /*, memoryService */) // Inject RAGService
 	fileService := service.NewFileService(fileStorage, docRepo, taskRepo, taskQueueClient, vectorRepo)
-	authService := service.NewAuthService(userRepo, cfg) // Initialize AuthService
+	authService := service.NewAuthService(userRepo, cfg)                                // Initialize AuthService
+	configService := service.NewConfigService(configRepo)                               // Initialize ConfigService
+	structuredMemoryService := service.NewStructuredMemoryService(structuredMemoryRepo) // Initialize StructuredMemoryService
 
 	// Initialize API Handlers
 	chatHandler := api.NewChatHandler(chatService)
 	fileHandler := api.NewFileHandler(fileService)
-	authHandler := api.NewAuthHandler(authService) // Initialize AuthHandler
+	authHandler := api.NewAuthHandler(authService)                 // Initialize AuthHandler
+	configHandler := api.NewConfigHandler(configService)           // Initialize ConfigHandler
+	memoryHandler := api.NewMemoryHandler(structuredMemoryService) // Initialize MemoryHandler
 
 	// Initialize Middleware
 	authMiddleware := api.NewAuthMiddleware(authService) // Initialize AuthMiddleware
@@ -142,8 +148,23 @@ func main() {
 		protectedRoutes.Use(authMiddleware.Authenticate()) // Apply auth middleware to this group
 		{
 			// Register protected routes from handlers
-			chatHandler.RegisterRoutes(protectedRoutes) // Now uses the protected group
-			fileHandler.RegisterRoutes(protectedRoutes) // Now uses the protected group
+			chatHandler.RegisterRoutes(protectedRoutes)   // Registers /chat and /chat/{id}/messages
+			fileHandler.RegisterRoutes(protectedRoutes)   // Registers /files routes
+			configHandler.RegisterRoutes(protectedRoutes) // Registers /config routes
+
+			// Register the new route for getting conversations
+			protectedRoutes.GET("/conversations", chatHandler.GetUserConversationsHandler)
+
+			// Register Structured Memory routes
+			memoryGroup := protectedRoutes.Group("/memory/structured")
+			{
+				memoryGroup.POST("", memoryHandler.CreateMemory)        // POST /api/v1/memory/structured
+				memoryGroup.GET("", memoryHandler.GetUserMemories)      // GET /api/v1/memory/structured
+				memoryGroup.GET("/:key", memoryHandler.GetMemoryByKey)  // GET /api/v1/memory/structured/{key}
+				memoryGroup.PUT("/:key", memoryHandler.UpdateMemory)    // PUT /api/v1/memory/structured/{key}
+				memoryGroup.DELETE("/:key", memoryHandler.DeleteMemory) // DELETE /api/v1/memory/structured/{key}
+			}
+
 			// Register other protected handlers here...
 		}
 	}

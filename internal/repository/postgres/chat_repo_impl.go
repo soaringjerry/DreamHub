@@ -143,3 +143,51 @@ func reverseMessages(s []*entity.Message) {
 		s[i], s[j] = s[j], s[i]
 	}
 }
+
+// GetUserConversations 获取指定用户的所有对话基本信息，按最后更新时间降序排序。
+// 注意：当前实现从 conversation_history 推断信息，Title 字段将为空。
+func (r *postgresChatRepository) GetUserConversations(ctx context.Context, userID string) ([]*entity.Conversation, error) {
+	const sql = `
+		SELECT
+			conversation_id AS id,
+			user_id,
+			'' AS title, -- Title 暂时无法从 history 表高效获取
+			MIN(timestamp) AS created_at,
+			MAX(timestamp) AS last_updated_at
+		FROM conversation_history
+		WHERE user_id = $1
+		GROUP BY conversation_id, user_id
+		ORDER BY last_updated_at DESC
+	`
+
+	rows, err := r.db.Pool.Query(ctx, sql, userID)
+	if err != nil {
+		logger.ErrorContext(ctx, "从数据库获取用户对话列表失败", "error", err, "user_id", userID)
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "无法获取用户对话列表")
+	}
+	defer rows.Close()
+
+	conversations := make([]*entity.Conversation, 0)
+	for rows.Next() {
+		var conv entity.Conversation
+		// 注意：确保 entity.Conversation 中的字段类型与查询结果匹配
+		if err := rows.Scan(&conv.ID, &conv.UserID, &conv.Title, &conv.CreatedAt, &conv.LastUpdatedAt); err != nil {
+			logger.ErrorContext(ctx, "扫描数据库行失败 (对话列表)", "error", err)
+			// 决定是继续处理部分结果还是返回错误
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "处理数据库结果时出错")
+		}
+		// 确保 UserID 匹配 (虽然 WHERE 子句已过滤，但作为安全检查)
+		if conv.UserID != userID {
+			logger.WarnContext(ctx, "查询结果中的 UserID 与请求不匹配", "expected_user_id", userID, "actual_user_id", conv.UserID, "conversation_id", conv.ID)
+			continue // 跳过不匹配的记录
+		}
+		conversations = append(conversations, &conv)
+	}
+
+	if err := rows.Err(); err != nil {
+		logger.ErrorContext(ctx, "处理数据库结果集时出错 (对话列表)", "error", err)
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "处理数据库结果时出错")
+	}
+
+	return conversations, nil
+}

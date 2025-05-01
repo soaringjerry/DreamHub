@@ -47,6 +47,80 @@ interface ChatResponse {
   reply: string;
 }
 
+// --- Config API Interfaces ---
+
+// Matches dto.UserConfigResponse (excluding sensitive data like raw API key)
+export interface UserConfigResponse {
+  api_endpoint: string | null;
+  default_model: string | null;
+  api_key_encrypted: boolean;
+  custom_prompt?: string | null; // Add custom prompt field
+  created_at: string;
+  updated_at: string;
+}
+
+// Matches dto.UpdateUserConfigRequest
+export interface UpdateUserConfigRequest {
+  api_endpoint?: string | null;
+  default_model?: string | null;
+  api_key?: string | null;
+  custom_prompt?: string | null; // Add custom prompt field
+}
+
+// --- Chat History API Interfaces ---
+
+// Matches backend entity.ConversationInfo (adjust based on actual backend response)
+export interface ConversationInfo {
+  id: string;
+  user_id: string; // May not be needed if backend filters by authenticated user
+  title: string;
+  created_at: string; // ISO string format
+  updated_at: string; // ISO string format
+}
+
+// Matches backend entity.Message (adjust based on actual backend response)
+export interface Message {
+  id: string;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string; // ISO string format
+  // Add other fields if present, e.g., model, metadata
+}
+
+// --- Structured Memory API Interfaces ---
+
+// Matches backend entity.StructuredMemory
+export interface StructuredMemory {
+  id: string; // UUID
+  user_id: string; // UUID
+  key: string;
+  value: any; // JSONB in backend, so 'any' or a more specific type if known
+  created_at: string; // ISO string format
+  updated_at: string; // ISO string format
+}
+
+// Payload for creating/updating memory
+export interface MemoryPayload {
+  key: string;
+  value: any;
+}
+
+// --- Document API Interfaces ---
+
+// Matches backend entity.Document (adjust based on actual backend response)
+export interface DocumentInfo {
+    id: string; // UUID
+    user_id: string; // UUID
+    filename: string;
+    filepath: string; // Or maybe just filename is exposed? Check backend.
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    created_at: string; // ISO string format
+    updated_at: string; // ISO string format
+    // Add other relevant fields like error_message if available
+}
+
+
 // --- Axios Instance and Interceptor ---
 
 // Create a dedicated Axios instance
@@ -170,14 +244,180 @@ export const sendMessage = async (message: string, conversationId?: string): Pro
   }
 };
 
-// TODO: Add functions for other endpoints if needed (e.g., listDocuments, getTaskStatus)
+// --- User Configuration API Functions ---
+
+/**
+ * Fetches the current user's configuration.
+ * Assumes user is authenticated (token handled by interceptor).
+ * @returns Promise containing the user's configuration
+ */
+export const getUserConfig = async (): Promise<UserConfigResponse> => {
+  try {
+    const response = await apiClient.get<UserConfigResponse>('/users/me/config');
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to fetch user configuration');
+  }
+};
+
+// --- Chat History API Functions ---
+
+/**
+ * Fetches the list of conversations for the current user.
+ * Assumes user is authenticated (token handled by interceptor).
+ * @returns Promise containing an array of ConversationInfo objects
+ */
+export const getUserConversations = async (): Promise<ConversationInfo[]> => {
+  try {
+    const response = await apiClient.get<ConversationInfo[]>('/conversations');
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to fetch conversations');
+  }
+};
+
+/**
+ * Fetches the messages for a specific conversation.
+ * Assumes user is authenticated (token handled by interceptor).
+ * @param conversationId The ID of the conversation to fetch messages for.
+ * @returns Promise containing an array of Message objects
+ */
+export const getConversationMessages = async (conversationId: string): Promise<Message[]> => {
+  if (!conversationId) {
+    // Return an empty array or reject? Rejecting seems better for explicit error handling.
+    return Promise.reject(new Error('Conversation ID is required'));
+  }
+  try {
+    // Ensure the URL is correctly formed, e.g., /api/v1/chat/{conversationId}/messages
+    const response = await apiClient.get<Message[]>(`/chat/${conversationId}/messages`);
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, `Failed to fetch messages for conversation ${conversationId}`);
+  }
+};
+
+/**
+ * Updates the current user's configuration.
+ * Assumes user is authenticated (token handled by interceptor).
+ * @param configData The configuration data to update. Fields can be omitted for partial updates.
+ *                   Send null to clear optional fields like api_key.
+ * @returns Promise containing the updated user configuration
+ */
+export const updateUserConfig = async (configData: UpdateUserConfigRequest): Promise<UserConfigResponse> => {
+  try {
+    // Backend expects PUT request with JSON body
+    const response = await apiClient.put<UserConfigResponse>('/users/me/config', configData, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to update user configuration');
+  }
+};
+
+// --- Structured Memory API Functions ---
+
+/**
+ * Creates a new structured memory entry.
+ * @param payload The key-value pair to store.
+ * @returns Promise containing the created memory entry.
+ */
+export const createMemory = async (payload: MemoryPayload): Promise<StructuredMemory> => {
+  try {
+    const response = await apiClient.post<StructuredMemory>('/memory/structured', payload);
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to create memory entry');
+  }
+};
+
+/**
+ * Fetches all structured memory entries for the current user.
+ * @returns Promise containing an array of memory entries.
+ */
+export const getMemories = async (): Promise<StructuredMemory[]> => {
+  try {
+    const response = await apiClient.get<StructuredMemory[]>('/memory/structured');
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to fetch memory entries');
+  }
+};
+
+/**
+ * Fetches a specific structured memory entry by key.
+ * @param key The key of the memory entry to fetch.
+ * @returns Promise containing the memory entry.
+ */
+export const getMemoryByKey = async (key: string): Promise<StructuredMemory> => {
+  try {
+    const response = await apiClient.get<StructuredMemory>(`/memory/structured/${encodeURIComponent(key)}`);
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, `Failed to fetch memory entry with key: ${key}`);
+  }
+};
+
+/**
+ * Updates an existing structured memory entry.
+ * @param key The key of the memory entry to update.
+ * @param value The new value for the entry.
+ * @returns Promise containing the updated memory entry.
+ */
+export const updateMemory = async (key: string, value: any): Promise<StructuredMemory> => {
+    const payload: Partial<MemoryPayload> = { value }; // Backend expects value in body for PUT
+    try {
+      const response = await apiClient.put<StructuredMemory>(`/memory/structured/${encodeURIComponent(key)}`, payload);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error, `Failed to update memory entry with key: ${key}`);
+    }
+  };
+
+/**
+ * Deletes a structured memory entry by key.
+ * @param key The key of the memory entry to delete.
+ * @returns Promise that resolves when deletion is successful.
+ */
+export const deleteMemory = async (key: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/memory/structured/${encodeURIComponent(key)}`);
+  } catch (error) {
+    throw handleApiError(error, `Failed to delete memory entry with key: ${key}`);
+  }
+};
+
+// --- Document API Functions ---
+
+/**
+ * Fetches the list of documents for the current user.
+ * @returns Promise containing an array of DocumentInfo objects.
+ */
+export const getDocuments = async (): Promise<DocumentInfo[]> => {
+  try {
+    // Assuming the backend returns an array directly under /documents
+    const response = await apiClient.get<DocumentInfo[]>('/documents');
+    return response.data;
+  } catch (error) {
+    throw handleApiError(error, 'Failed to fetch documents');
+  }
+};
+
+/**
+ * Deletes a document by its ID.
+ * @param docId The ID of the document to delete.
+ * @returns Promise that resolves when deletion is successful.
+ */
+export const deleteDocument = async (docId: string): Promise<void> => {
+  try {
+    await apiClient.delete(`/documents/${docId}`);
+  } catch (error) {
+    throw handleApiError(error, `Failed to delete document with ID: ${docId}`);
+  }
+};
+
+
+// TODO: Add functions for other endpoints if needed (e.g., getTaskStatus)
 // Remember to use `apiClient` for these calls as well.
-// Example:
-// export const listDocuments = async (limit = 20, offset = 0): Promise<Document[]> => {
-//   try {
-//     const response = await apiClient.get<Document[]>('/documents', { params: { limit, offset } });
-//     return response.data;
-//   } catch (error) {
-//     throw handleApiError(error, 'Failed to fetch documents');
-//   }
-// };

@@ -232,3 +232,14 @@ func (s *chatServiceImpl) GetConversationMessages(ctx context.Context, conversat
 	}
 	return messages, nil
 }
+
+// GetUserConversations 获取指定用户的所有对话基本信息。
+func (s *chatServiceImpl) GetUserConversations(ctx context.Context, userID string) ([]*entity.Conversation, error) {
+	// 直接调用 repository 层的方法
+	conversations, err := s.chatRepo.GetUserConversations(ctx, userID)
+	if err != nil {
+		// 错误已在 repository 层记录和包装
+		return nil, err
+	}
+	return conversations, nil
+}
