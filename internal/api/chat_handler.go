@@ -68,12 +68,19 @@ func (h *ChatHandler) handlePostChat(c *gin.Context) {
 		return
 	}
 
-	// Get UserID from the context set by the auth middleware
-	userID, ok := GetUserIDFromContext(c)
+	// Get UserID directly from the context set by the auth middleware
+	userIDVal, exists := c.Get(authorizationPayloadKey) // Use the correct key
+	if !exists {
+		logger.ErrorContext(c.Request.Context(), "认证信息未在上下文中找到 (ChatHandler)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少认证信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	userID, ok := userIDVal.(string) // Assert the type to string
 	if !ok {
-		// This should ideally not happen if middleware is applied correctly
-		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (ChatHandler)")
-		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		// Import "fmt" if not already imported at the top
+		logger.ErrorContext(c.Request.Context(), "上下文中的用户 ID 类型不正确 (ChatHandler)", "type", fmt.Sprintf("%T", userIDVal))
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，用户信息格式错误")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
@@ -134,11 +141,19 @@ func (h *ChatHandler) handleGetMessages(c *gin.Context) {
 		offsetInt = 0 // Use default if conversion fails or value is invalid
 	}
 
-	// Get UserID from the context set by the auth middleware
-	userID, ok := GetUserIDFromContext(c)
+	// Get UserID directly from the context set by the auth middleware
+	userIDVal, exists := c.Get(authorizationPayloadKey) // Use the correct key
+	if !exists {
+		logger.ErrorContext(c.Request.Context(), "认证信息未在上下文中找到 (GetMessages)")
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少认证信息")
+		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
+		return
+	}
+	userID, ok := userIDVal.(string) // Assert the type to string
 	if !ok {
-		logger.ErrorContext(c.Request.Context(), "无法从上下文中获取用户 ID (GetMessages)")
-		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，缺少用户信息")
+		// Import "fmt" if not already imported at the top
+		logger.ErrorContext(c.Request.Context(), "上下文中的用户 ID 类型不正确 (GetMessages)", "type", fmt.Sprintf("%T", userIDVal))
+		appErr := apperr.New(apperr.CodeInternal, "无法处理请求，用户信息格式错误")
 		c.JSON(appErr.HTTPStatus, gin.H{"error": appErr})
 		return
 	}
