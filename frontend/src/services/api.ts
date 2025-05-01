@@ -132,10 +132,24 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     // Only add token to requests that are not for auth endpoints
+    // Only add token to requests that are not for auth endpoints
     if (config.url && !config.url.startsWith('/auth/')) {
-      const token = localStorage.getItem('authToken'); // Assuming token is stored in localStorage
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+      const authStorage = localStorage.getItem('auth-storage'); // Read the persisted zustand state
+      if (authStorage) {
+        try {
+          const authData = JSON.parse(authStorage);
+          const token = authData?.state?.token; // Access the token within the persisted state object
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+            console.log('Attaching token to request:', config.url); // Added for debugging
+          } else {
+             console.warn('Token not found in auth-storage for request:', config.url); // Added for debugging
+          }
+        } catch (e) {
+          console.error('Failed to parse auth-storage from localStorage', e);
+        }
+      } else {
+         console.warn('auth-storage not found in localStorage for request:', config.url); // Added for debugging
       }
     }
     return config;
