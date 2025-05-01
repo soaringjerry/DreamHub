@@ -6,8 +6,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 # Download migrate CLI tool
 RUN go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-# Move migrate to a temporary location to avoid COPY issues later
-RUN mkdir -p /tmp/bin && mv /go/bin/migrate /tmp/bin/migrate
+# No need to move migrate anymore
 COPY . .
 # Build server
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /server cmd/server/main.go
@@ -33,7 +32,7 @@ WORKDIR /app
 # Copy Go binaries from builder stage
 COPY --from=builder /server /app/server
 COPY --from=builder /worker /app/worker
-COPY --from=builder /tmp/bin/migrate /usr/local/bin/migrate # Copy migrate CLI, specifying destination filename
+COPY --from=builder /go/bin/migrate /usr/local/bin/
 # Copy frontend build from frontend-builder stage
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 # Copy migrations
