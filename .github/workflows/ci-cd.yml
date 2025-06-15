@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Frontend Tests (Vitest)
         working-directory: ./frontend # Change working directory to frontend
-        run: npm test -- --run --coverage # Run test command directly
+        run: npm run coverage # Use the coverage script defined in package.json
 
       # Optional: Upload Vitest coverage report
       # - name: Upload Vitest coverage to Codecov

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"dreamhub/internal/entity"
+	"github.com/soaringjerry/dreamhub/internal/entity"
 )
 
 // SyncRepository defines the interface for sync-related database operations

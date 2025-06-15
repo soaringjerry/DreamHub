@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"dreamhub/internal/entity"
-	"dreamhub/internal/repository"
-	"dreamhub/pkg/apperr"
-	"dreamhub/pkg/logger"
+	"github.com/soaringjerry/dreamhub/internal/entity"
+	"github.com/soaringjerry/dreamhub/internal/repository"
+	"github.com/soaringjerry/dreamhub/pkg/apperr"
+	"github.com/soaringjerry/dreamhub/pkg/logger"
 	"time"
 
 	"github.com/google/uuid"

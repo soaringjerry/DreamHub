@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"dreamhub/internal/entity"
+	"github.com/soaringjerry/dreamhub/internal/entity"
 	"time"
 )
 

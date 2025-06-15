@@ -1,10 +1,10 @@
 package api
 
 import (
-	"dreamhub/internal/entity"
-	"dreamhub/internal/service"
-	"dreamhub/pkg/apperr"
-	"dreamhub/pkg/logger"
+	"github.com/soaringjerry/dreamhub/internal/entity"
+	"github.com/soaringjerry/dreamhub/internal/service"
+	"github.com/soaringjerry/dreamhub/pkg/apperr"
+	"github.com/soaringjerry/dreamhub/pkg/logger"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
