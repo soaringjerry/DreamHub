@@ -81,7 +81,7 @@ func main() {
 	userRepo := postgres.NewPostgresUserRepository(dbPool.Pool)                 // Initialize UserRepository
 	configRepo := postgres.NewPostgresConfigRepository(dbPool.Pool)             // Initialize ConfigRepository
 	structuredMemoryRepo := postgres.NewStructuredMemoryRepository(dbPool.Pool) // Initialize StructuredMemoryRepository
-	syncRepo := postgres.NewSyncRepository(dbPool.Pool, logger.Default())        // Initialize SyncRepository
+	syncRepo := postgres.NewSyncRepository(dbPool.Pool, logger.GetLogger())        // Initialize SyncRepository
 
 	// Initialize Services
 	ragService := service.NewRAGService(vectorRepo, embeddingProvider) // Initialize RAGService
@@ -91,7 +91,7 @@ func main() {
 	authService := service.NewAuthService(userRepo, cfg)                                // Initialize AuthService
 	configService := service.NewConfigService(configRepo)                               // Initialize ConfigService
 	structuredMemoryService := service.NewStructuredMemoryService(structuredMemoryRepo) // Initialize StructuredMemoryService
-	syncService := service.NewSyncService(syncRepo, chatRepo, structuredMemoryRepo, configRepo, logger.Default()) // Initialize SyncService
+	syncService := service.NewSyncService(syncRepo, chatRepo, structuredMemoryRepo, configRepo, logger.GetLogger()) // Initialize SyncService
 
 	// Initialize API Handlers
 	chatHandler := api.NewChatHandler(chatService)
@@ -99,7 +99,7 @@ func main() {
 	authHandler := api.NewAuthHandler(authService)                 // Initialize AuthHandler
 	configHandler := api.NewConfigHandler(configService)           // Initialize ConfigHandler
 	memoryHandler := api.NewMemoryHandler(structuredMemoryService) // Initialize MemoryHandler
-	syncHandler := api.NewSyncHandler(syncService, logger.Default()) // Initialize SyncHandler
+	syncHandler := api.NewSyncHandler(syncService, logger.GetLogger()) // Initialize SyncHandler
 
 	// Initialize Middleware
 	authMiddleware := api.NewAuthMiddleware(authService) // Initialize AuthMiddleware

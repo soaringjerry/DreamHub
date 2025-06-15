@@ -6,7 +6,7 @@ import (
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
-	"github.com/soaringjerry/dreamhub/pkg/logger"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,11 +16,11 @@ import (
 
 type syncRepositoryImpl struct {
 	db  *pgxpool.Pool
-	log *logger.Logger
+	log *slog.Logger
 }
 
 // NewSyncRepository creates a new PostgreSQL-based sync repository
-func NewSyncRepository(db *pgxpool.Pool, log *logger.Logger) repository.SyncRepository {
+func NewSyncRepository(db *pgxpool.Pool, log *slog.Logger) repository.SyncRepository {
 	return &syncRepositoryImpl{db: db, log: log}
 }
 
@@ -44,9 +44,9 @@ func (r *syncRepositoryImpl) GetSyncStatus(ctx context.Context, userID, deviceID
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, apperr.NewNotFoundError("sync status not found")
+			return nil, apperr.New(apperr.CodeNotFound, "sync status not found")
 		}
-		return nil, apperr.WrapInternal(err, "failed to get sync status")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to get sync status")
 	}
 
 	return &status, nil
@@ -84,7 +84,7 @@ func (r *syncRepositoryImpl) CreateOrUpdateSyncStatus(ctx context.Context, statu
 	)
 
 	if err != nil {
-		return apperr.WrapInternal(err, "failed to create/update sync status")
+		return apperr.Wrap(err, apperr.CodeInternal, "failed to create/update sync status")
 	}
 
 	return nil
@@ -94,14 +94,14 @@ func (r *syncRepositoryImpl) UpdateSyncVersion(ctx context.Context, userID strin
 	query := `UPDATE sync_status SET sync_version = $1, updated_at = $2 WHERE user_id = $3`
 	_, err := r.db.Exec(ctx, query, version, time.Now(), userID)
 	if err != nil {
-		return apperr.WrapInternal(err, "failed to update sync version")
+		return apperr.Wrap(err, apperr.CodeInternal, "failed to update sync version")
 	}
 	return nil
 }
 
 func (r *syncRepositoryImpl) GetConversationsSince(ctx context.Context, userID string, since time.Time) ([]entity.Conversation, error) {
 	query := `
-		SELECT id, user_id, title, created_at, updated_at, version, sync_at
+		SELECT id, user_id, title, created_at, last_updated_at, version, sync_at
 		FROM conversations
 		WHERE user_id = $1 AND sync_at > $2 AND deleted_at IS NULL
 		ORDER BY sync_at ASC
@@ -109,7 +109,7 @@ func (r *syncRepositoryImpl) GetConversationsSince(ctx context.Context, userID s
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query conversations")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query conversations")
 	}
 	defer rows.Close()
 
@@ -124,12 +124,12 @@ func (r *syncRepositoryImpl) GetConversationsSince(ctx context.Context, userID s
 			&conv.UserID,
 			&conv.Title,
 			&conv.CreatedAt,
-			&conv.UpdatedAt,
+			&conv.LastUpdatedAt,
 			&version,
 			&syncAt,
 		)
 		if err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan conversation")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan conversation")
 		}
 		conversations = append(conversations, conv)
 	}
@@ -147,7 +147,7 @@ func (r *syncRepositoryImpl) GetMessagesSince(ctx context.Context, userID string
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query messages")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query messages")
 	}
 	defer rows.Close()
 
@@ -169,7 +169,7 @@ func (r *syncRepositoryImpl) GetMessagesSince(ctx context.Context, userID string
 			&syncAt,
 		)
 		if err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan message")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan message")
 		}
 		messages = append(messages, msg)
 	}
@@ -187,7 +187,7 @@ func (r *syncRepositoryImpl) GetStructuredMemoriesSince(ctx context.Context, use
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query structured memories")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query structured memories")
 	}
 	defer rows.Close()
 
@@ -208,7 +208,7 @@ func (r *syncRepositoryImpl) GetStructuredMemoriesSince(ctx context.Context, use
 			&syncAt,
 		)
 		if err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan structured memory")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan structured memory")
 		}
 		memories = append(memories, mem)
 	}
@@ -244,7 +244,7 @@ func (r *syncRepositoryImpl) GetUserConfigSince(ctx context.Context, userID stri
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
-		return nil, apperr.WrapInternal(err, "failed to get user config")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to get user config")
 	}
 
 	return &config, nil
@@ -260,7 +260,7 @@ func (r *syncRepositoryImpl) GetDeletedConversations(ctx context.Context, userID
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query deleted conversations")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query deleted conversations")
 	}
 	defer rows.Close()
 
@@ -268,7 +268,7 @@ func (r *syncRepositoryImpl) GetDeletedConversations(ctx context.Context, userID
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan conversation id")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan conversation id")
 		}
 		ids = append(ids, id)
 	}
@@ -286,7 +286,7 @@ func (r *syncRepositoryImpl) GetDeletedMessages(ctx context.Context, userID stri
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query deleted messages")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query deleted messages")
 	}
 	defer rows.Close()
 
@@ -294,7 +294,7 @@ func (r *syncRepositoryImpl) GetDeletedMessages(ctx context.Context, userID stri
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan message id")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan message id")
 		}
 		ids = append(ids, id)
 	}
@@ -312,7 +312,7 @@ func (r *syncRepositoryImpl) GetDeletedStructuredMemories(ctx context.Context, u
 
 	rows, err := r.db.Query(ctx, query, userID, since)
 	if err != nil {
-		return nil, apperr.WrapInternal(err, "failed to query deleted structured memories")
+		return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to query deleted structured memories")
 	}
 	defer rows.Close()
 
@@ -320,7 +320,7 @@ func (r *syncRepositoryImpl) GetDeletedStructuredMemories(ctx context.Context, u
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err != nil {
-			return nil, apperr.WrapInternal(err, "failed to scan memory key")
+			return nil, apperr.Wrap(err, apperr.CodeInternal, "failed to scan memory key")
 		}
 		keys = append(keys, key)
 	}
@@ -338,22 +338,22 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 	// Start a transaction
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
-		return apperr.WrapInternal(err, "failed to start transaction")
+		return apperr.Wrap(err, apperr.CodeInternal, "failed to start transaction")
 	}
 	defer tx.Rollback(ctx)
 
 	// Apply conversation changes
 	for _, conv := range changes.Conversations {
 		query := `
-			INSERT INTO conversations (id, user_id, title, created_at, updated_at)
+			INSERT INTO conversations (id, user_id, title, created_at, last_updated_at)
 			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (id) DO UPDATE SET
 				title = EXCLUDED.title,
-				updated_at = EXCLUDED.updated_at
+				last_updated_at = EXCLUDED.last_updated_at
 		`
-		_, err := tx.Exec(ctx, query, conv.ID, userID, conv.Title, conv.CreatedAt, conv.UpdatedAt)
+		_, err := tx.Exec(ctx, query, conv.ID, userID, conv.Title, conv.CreatedAt, conv.LastUpdatedAt)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply conversation change")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply conversation change")
 		}
 	}
 
@@ -368,7 +368,7 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 		`
 		_, err := tx.Exec(ctx, query, msg.ID, msg.ConversationID, userID, msg.SenderRole, msg.Content, msg.Timestamp)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply message change")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply message change")
 		}
 	}
 
@@ -383,7 +383,7 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 		`
 		_, err := tx.Exec(ctx, query, mem.ID, userID, mem.Key, mem.Value, mem.CreatedAt, mem.UpdatedAt)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply structured memory change")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply structured memory change")
 		}
 	}
 
@@ -408,7 +408,7 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 			changes.UserConfig.UpdatedAt,
 		)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply user config change")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply user config change")
 		}
 	}
 
@@ -417,7 +417,7 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 		query := `UPDATE conversations SET deleted_at = CURRENT_TIMESTAMP WHERE id = ANY($1) AND user_id = $2`
 		_, err := tx.Exec(ctx, query, changes.DeletedItems.ConversationIDs, userID)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply conversation deletions")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply conversation deletions")
 		}
 	}
 
@@ -425,7 +425,7 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 		query := `UPDATE conversation_history SET deleted_at = CURRENT_TIMESTAMP WHERE id = ANY($1) AND user_id = $2`
 		_, err := tx.Exec(ctx, query, changes.DeletedItems.MessageIDs, userID)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply message deletions")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply message deletions")
 		}
 	}
 
@@ -433,13 +433,13 @@ func (r *syncRepositoryImpl) ApplySyncChanges(ctx context.Context, userID string
 		query := `UPDATE structured_memories SET deleted_at = CURRENT_TIMESTAMP WHERE key = ANY($1) AND user_id = $2`
 		_, err := tx.Exec(ctx, query, changes.DeletedItems.StructuredMemoryKeys, userID)
 		if err != nil {
-			return apperr.WrapInternal(err, "failed to apply structured memory deletions")
+			return apperr.Wrap(err, apperr.CodeInternal, "failed to apply structured memory deletions")
 		}
 	}
 
 	// Commit transaction
 	if err := tx.Commit(ctx); err != nil {
-		return apperr.WrapInternal(err, "failed to commit transaction")
+		return apperr.Wrap(err, apperr.CodeInternal, "failed to commit transaction")
 	}
 
 	return nil

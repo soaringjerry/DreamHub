@@ -5,7 +5,7 @@ import (
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/repository"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
-	"github.com/soaringjerry/dreamhub/pkg/logger"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,7 +16,7 @@ type syncServiceImpl struct {
 	chatRepo    repository.ChatRepository
 	memoryRepo  repository.StructuredMemoryRepository
 	configRepo  repository.ConfigRepository
-	log         *logger.Logger
+	log         *slog.Logger
 }
 
 // NewSyncService creates a new sync service instance
@@ -25,7 +25,7 @@ func NewSyncService(
 	chatRepo repository.ChatRepository,
 	memoryRepo repository.StructuredMemoryRepository,
 	configRepo repository.ConfigRepository,
-	log *logger.Logger,
+	log *slog.Logger,
 ) SyncService {
 	return &syncServiceImpl{
 		syncRepo:   syncRepo,
@@ -39,7 +39,7 @@ func NewSyncService(
 func (s *syncServiceImpl) GetSyncStatus(ctx context.Context, userID, deviceID string) (*entity.SyncStatus, error) {
 	status, err := s.syncRepo.GetSyncStatus(ctx, userID, deviceID)
 	if err != nil {
-		if apperr.IsNotFound(err) {
+		if err != nil && err.Error() == "sync status not found" {
 			// Create new sync status for first-time sync
 			status = &entity.SyncStatus{
 				ID:          uuid.New(),

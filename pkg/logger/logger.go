@@ -106,3 +106,11 @@ func ErrorContext(ctx context.Context, msg string, args ...any) {
 func DebugContext(ctx context.Context, msg string, args ...any) {
 	Ctx(ctx).Debug(msg, args...)
 }
+
+// Default returns the default logger (alias for GetLogger for compatibility)
+func Default() *slog.Logger {
+	return GetLogger()
+}
+
+// Logger is a type alias for slog.Logger for backward compatibility
+type Logger = slog.Logger

@@ -4,7 +4,7 @@ import (
 	"github.com/soaringjerry/dreamhub/internal/entity"
 	"github.com/soaringjerry/dreamhub/internal/service"
 	"github.com/soaringjerry/dreamhub/pkg/apperr"
-	"github.com/soaringjerry/dreamhub/pkg/logger"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -13,11 +13,11 @@ import (
 // SyncHandler handles sync-related HTTP requests
 type SyncHandler struct {
 	syncService service.SyncService
-	log         *logger.Logger
+	log         *slog.Logger
 }
 
 // NewSyncHandler creates a new sync handler
-func NewSyncHandler(syncService service.SyncService, log *logger.Logger) *SyncHandler {
+func NewSyncHandler(syncService service.SyncService, log *slog.Logger) *SyncHandler {
 	return &SyncHandler{
 		syncService: syncService,
 		log:         log,
