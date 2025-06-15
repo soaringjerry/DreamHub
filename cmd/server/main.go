@@ -81,6 +81,7 @@ func main() {
 	userRepo := postgres.NewPostgresUserRepository(dbPool.Pool)                 // Initialize UserRepository
 	configRepo := postgres.NewPostgresConfigRepository(dbPool.Pool)             // Initialize ConfigRepository
 	structuredMemoryRepo := postgres.NewStructuredMemoryRepository(dbPool.Pool) // Initialize StructuredMemoryRepository
+	syncRepo := postgres.NewSyncRepository(dbPool.Pool, logger.Default())        // Initialize SyncRepository
 
 	// Initialize Services
 	ragService := service.NewRAGService(vectorRepo, embeddingProvider) // Initialize RAGService
@@ -90,6 +91,7 @@ func main() {
 	authService := service.NewAuthService(userRepo, cfg)                                // Initialize AuthService
 	configService := service.NewConfigService(configRepo)                               // Initialize ConfigService
 	structuredMemoryService := service.NewStructuredMemoryService(structuredMemoryRepo) // Initialize StructuredMemoryService
+	syncService := service.NewSyncService(syncRepo, chatRepo, structuredMemoryRepo, configRepo, logger.Default()) // Initialize SyncService
 
 	// Initialize API Handlers
 	chatHandler := api.NewChatHandler(chatService)
@@ -97,6 +99,7 @@ func main() {
 	authHandler := api.NewAuthHandler(authService)                 // Initialize AuthHandler
 	configHandler := api.NewConfigHandler(configService)           // Initialize ConfigHandler
 	memoryHandler := api.NewMemoryHandler(structuredMemoryService) // Initialize MemoryHandler
+	syncHandler := api.NewSyncHandler(syncService, logger.Default()) // Initialize SyncHandler
 
 	// Initialize Middleware
 	authMiddleware := api.NewAuthMiddleware(authService) // Initialize AuthMiddleware
@@ -163,6 +166,15 @@ func main() {
 				memoryGroup.GET("/:key", memoryHandler.GetMemoryByKey)  // GET /api/v1/memory/structured/{key}
 				memoryGroup.PUT("/:key", memoryHandler.UpdateMemory)    // PUT /api/v1/memory/structured/{key}
 				memoryGroup.DELETE("/:key", memoryHandler.DeleteMemory) // DELETE /api/v1/memory/structured/{key}
+			}
+
+			// Register Sync routes
+			syncGroup := protectedRoutes.Group("/sync")
+			{
+				syncGroup.GET("/status", syncHandler.GetSyncStatus)              // GET /api/v1/sync/status
+				syncGroup.POST("/pull", syncHandler.PullChanges)                 // POST /api/v1/sync/pull
+				syncGroup.POST("/push", syncHandler.PushChanges)                 // POST /api/v1/sync/push
+				syncGroup.POST("/conflicts/resolve", syncHandler.ResolveConflicts) // POST /api/v1/sync/conflicts/resolve
 			}
 
 			// Register other protected handlers here...

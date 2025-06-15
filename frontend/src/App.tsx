@@ -14,6 +14,7 @@ import RegisterPage from './pages/RegisterPage';
 import SettingsPage from './pages/SettingsPage';
 import PersonalizationPage from './pages/PersonalizationPage'; // Import Personalization Page
 import ProtectedRoute from './components/ProtectedRoute';
+import { SyncStatus } from './components/SyncStatus';
 
 // Main application layout component
 const MainLayout: React.FC = () => {
@@ -139,6 +140,13 @@ function App() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
             </span>
             <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{t('onlineStatus')}</span>
+
+            {/* Sync Status */}
+            {isAuthenticated && (
+              <div className="ml-3 border-l border-gray-300 dark:border-gray-600 pl-3">
+                <SyncStatus />
+              </div>
+            )}
 
             {/* User Info / Logout Button */}
             {isAuthenticated && currentUser ? (

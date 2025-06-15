@@ -462,3 +462,152 @@
         }
         ```
 *   **错误响应**: 通常不会有特定错误，失败表示服务器无法访问。
+
+### 2.10 云端同步 (`/sync`)
+
+管理跨设备的数据同步功能。
+
+*   **认证**: 所有端点都需要有效的用户认证 (JWT Token)。
+
+#### 2.10.1 获取同步状态
+
+*   **方法**: `GET`
+*   **路径**: `/api/v1/sync/status`
+*   **查询参数**:
+    *   `device_id`: (string, required) 设备标识符。
+*   **成功响应 (200 OK)**: 返回设备的同步状态。
+    *   `Content-Type`: `application/json`
+    *   **Body**:
+        ```json
+        {
+          "id": "sync-status-uuid",
+          "user_id": "user-uuid-string",
+          "device_id": "device-identifier",
+          "last_sync_at": "2025-05-01T10:00:00Z",
+          "sync_version": 42,
+          "created_at": "2025-04-01T08:00:00Z",
+          "updated_at": "2025-05-01T10:00:00Z"
+        }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 缺少 `device_id` 参数。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 查询数据库失败。
+
+#### 2.10.2 拉取更新 (Pull Changes)
+
+*   **方法**: `POST`
+*   **路径**: `/api/v1/sync/pull`
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 对象 (`entity.SyncRequest`)
+    ```json
+    {
+      "device_id": "device-identifier",
+      "last_sync_at": "2025-05-01T09:00:00Z", // 可选，客户端上次同步时间
+      "sync_version": 41 // 可选，客户端当前版本号
+    }
+    ```
+*   **成功响应 (200 OK)**: 返回自上次同步以来的所有更改。
+    *   `Content-Type`: `application/json`
+    *   **Body**: (`entity.SyncResponse`)
+        ```json
+        {
+          "sync_version": 43,
+          "changes": {
+            "conversations": [
+              { "id": "...", "title": "...", "created_at": "...", "updated_at": "..." }
+            ],
+            "messages": [
+              { "id": "...", "conversation_id": "...", "content": "...", ... }
+            ],
+            "structured_memory": [
+              { "id": "...", "key": "...", "value": {...}, ... }
+            ],
+            "user_config": {
+              "id": "...", "default_model": "gpt-4", ...
+            },
+            "deleted_items": {
+              "conversation_ids": ["deleted-conv-id-1"],
+              "message_ids": ["deleted-msg-id-1", "deleted-msg-id-2"],
+              "structured_memory_keys": ["deleted-key-1"]
+            }
+          },
+          "conflicts": [], // 如果有冲突，会在这里列出
+          "server_time": "2025-05-01T10:30:00Z"
+        }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 查询数据失败。
+
+#### 2.10.3 推送更新 (Push Changes)
+
+*   **方法**: `POST`
+*   **路径**: `/api/v1/sync/push`
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 对象 (`entity.SyncPushRequest`)
+    ```json
+    {
+      "device_id": "device-identifier",
+      "sync_version": 42,
+      "changes": {
+        "conversations": [...], // 新增或修改的对话
+        "messages": [...], // 新增或修改的消息
+        "structured_memory": [...], // 新增或修改的记忆
+        "user_config": {...}, // 修改的用户配置
+        "deleted_items": {
+          "conversation_ids": [...],
+          "message_ids": [...],
+          "structured_memory_keys": [...]
+        }
+      }
+    }
+    ```
+*   **成功响应 (200 OK)**: 返回推送结果。
+    *   `Content-Type`: `application/json`
+    *   **Body**: (`entity.SyncPushResponse`)
+        ```json
+        {
+          "success": true,
+          "sync_version": 44,
+          "conflicts": [], // 如果有冲突，success 为 false
+          "server_time": "2025-05-01T10:35:00Z"
+        }
+        ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **409 Conflict**: 存在数据冲突（返回冲突列表）。
+    *   **500 Internal Server Error**: 应用更改失败。
+
+#### 2.10.4 解决冲突
+
+*   **方法**: `POST`
+*   **路径**: `/api/v1/sync/conflicts/resolve`
+*   **请求头**:
+    *   `Content-Type`: `application/json`
+*   **请求体**: JSON 数组，包含冲突解决方案
+    ```json
+    [
+      {
+        "entity_type": "conversation",
+        "entity_id": "conv-uuid-1",
+        "local_value": {...},
+        "remote_value": {...},
+        "resolution": "remote" // "local", "remote", 或 "merge"
+      }
+    ]
+    ```
+*   **成功响应 (200 OK)**:
+    ```json
+    {
+      "message": "conflicts resolved successfully"
+    }
+    ```
+*   **错误响应**:
+    *   **400 Bad Request**: 请求体无效。
+    *   **401 Unauthorized**: 未认证或认证无效。
+    *   **500 Internal Server Error**: 解决冲突失败。

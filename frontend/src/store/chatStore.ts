@@ -1,6 +1,7 @@
 import { create } from 'zustand'; // Removed unused StateCreator
 import { persist, createJSONStorage, PersistOptions } from 'zustand/middleware'; // Import PersistOptions
 import { useAuthStore } from './authStore'; // Import auth store
+import { useSyncStore } from './syncStore'; // Import sync store
 // Removed unused uuidv4 import
 import {
   sendMessage as sendMessageApi,
@@ -155,6 +156,10 @@ export const useChatStore = create<ChatStore>()( // Use combined type
             activeConversationId: newActiveId,
           };
         });
+        
+        // Add to sync offline queue
+        useSyncStore.getState().addToOfflineQueue('deleted_conversation', conversationId);
+        
         console.log("Deleted conversation locally:", conversationId);
       },
 
