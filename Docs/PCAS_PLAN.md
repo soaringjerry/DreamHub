@@ -1,116 +1,76 @@
-# DreamHub 生态核心: PCAS 架构计划 (v4.0 - Final)
+# DreamHub 生态核心: PCAS 架构计划 (v6.0 - Actionable Roadmap)
 
-## 1. 核心原则与愿景
+## 1. 顶层设计与核心原则 (v5.0 Consensus)
 
-### 1.1. 终极愿景: 自有数据集与个人模型
+本章节总结了我们在此前版本中达成的核心共识。
 
-DreamHub 生态的最终目标，是让用户拥有并掌控一个完全属于自己的、高质量的私有数据集。这个数据集由PCAS在日常工作中，通过整合、处理和记录用户的所有数字化交互而形成。
+### 1.1. 核心原则: 数据绝对私有，计算灵活调度
+*   **数据绝对私有**: PCAS作为软件，部署在用户的私有环境中。
+*   **计算灵活调度**: PCAS内置策略引擎，允许用户在本地计算和云端API计算之间进行选择与平衡。
 
-最终，用户将可以使用这个独一无二的数据集，去微调甚至训练一个真正懂自己、只为自己服务的个人AI模型。这是我们实现真正“个人人工智能”的路径。
+### 1.2. 三大计算模式
+1.  **本地模式 (Local Compute):** 极致隐私。
+2.  **混合模式 (Hybrid Compute):** 兼顾隐私与性能。
+3.  **云端模式 (Cloud Compute):** 最强算力。
 
-### 1.2. 核心原则: 数据主权与可信智能
+### 1.3. 终极愿景: 从数据熔炉到个人AI
+PCAS是一个**数据熔炉**，旨在帮助用户沉淀私有数据集，用以微调或训练个人AI模型。
 
-PCAS 的首要设计原则是 **开源、本地化、私有化**。我们坚信，真正的个人AI必须建立在用户对自身数据绝对控制的基础之上。
+### 1.4. 社会理想: 建立开放生态与标准
+我们致力于构建一个开源、社区驱动的生态系统，并为个人AI领域定义开放标准。
 
-与依赖云端处理大量敏感数据的模式不同，DreamHub生态致力于：
-*   **数据主权:** 用户的敏感数据应尽可能保留在本地。
-*   **高效利用资源:** 用尽可能小的本地资源，实现尽可能强大的智能。
-*   **可信与透明:** 通过开源，建立一个用户可以审查和信任的系统。
+---
 
-### 1.2. 核心定位: “个人决策中心”而非“应用工厂”
+## 2. 关键技术决策与落地细则 (o3 Review Integration)
 
-**DreamHub** 是我们的生态系统品牌，致力于在上述原则下，提供整合化的个人AI体验。
+本章节旨在吸收社区核心成员(o3)的专业评审，将高层架构细化为具体的工程决策。
 
-为了实现这一愿景，我们将在其内部构建一个独一无二的智能中枢，命名为 **Personal Central AI System (PCAS)**。
+### 2.1. 事件协议 (Protocol Selection)
+*   **决策:** 为避免“再造轮子”，我们的事件协议将**兼容 CloudEvents v1.0 核心字段** (`id`, `source`, `specversion`, `type`, `datacontenttype`, `subject`)，并在此基础上增加PCAS特定的扩展字段。所有事件结构将使用 **Protobuf** 进行定义，并包含 `version` 字段。
 
-为了实现这一愿景，我们将在其内部构建一个独一无二的智能中枢，命名为 **Personal Central AI System (PCAS)**。
+### 2.2. 策略引擎 (Policy Engine Implementation)
+*   **决策:** 采用分阶段落地策略。
+    *   **V1:** 实现一个基于YAML配置的**静态规则引擎**，支持基于`数据敏感度Tag`和`LLM token数`等阈值的决策。
+    *   **V2:** 探索引入一个轻量级的**领域特定语言(DSL)** 或独立的策略服务，以支持更动态的策略编程。
 
-PCAS 的定位不是一个像 Dify 那样的通用“应用构建平台”，而是一个服务于单个用户的“**个人决策中心**”。一个绝佳的类比是：**英国签证的“UKVI决策中心”**。
+### 2.3. 本地模型栈 (Local Model Stack)
+*   **决策:** PCAS将定义一套标准的**本地模型推理接口**，以支持不同的模型格式（如GGUF, ONNX）。我们将提供一个清晰的**模型生命周期管理流程**（下载-缓存-版本核对-更新），以避免“版本漂移”导致的推理差异。初期将以集成 **Ollama** 作为参考实现。
 
-它的核心价值在于其自身的**决策与实时规划能力**。它像一个决策中心，从所有D-App（信息渠道）汇集信息，然后基于一套复杂的内部规则和AI的推理判断能力，做出最终决策，并发出指令。
+### 2.4. 核心记忆模型 (Memory & Persistence)
+*   **决策:** 采用基于`nodes/edges`表的**统一图模型**，并在V1阶段提供**可插拔的`StorageProvider`**（默认SQLite，可选PostgreSQL）。所有流入“数据熔炉”的决策日志，都必须包含一个**可追溯的`trace_id`**，并接入 **OpenTelemetry** 标准。
 
-*   **Dify模式 (应用工厂):** 以“应用”为中心，由开发者预先编排固定的、数据驱动的工作流。
-*   **PCAS模式 (私人管家):** 以“用户”为中心，由事件驱动，PCAS作为智能体，根据实时上下文动态规划并协调多应用协作。
+### 2.5. 安全与权限 (Security Implementation)
+*   **决策:**
+    *   **V1:** 采用 **JWT + Scope列表** 作为D-App能力令牌的最小可行实现。
+    *   **V2:** 探索引入 **WebAssembly (WASM)** 沙箱来运行高风险的第三方D-App。
 
-## 2. PCAS 架构: 智能事件总线模型
+### 2.6. 社区与治理 (Governance)
+*   **决策:** 为支撑开放生态，我们将建立**技术治理三件套**：
+    1.  **代码规范:** 引入严格的Linting规则和CI检查。
+    2.  **变更提案流程:** 建立一个轻量级的DIP（DreamHub Improvement Proposal）或ADR（Architecture Decision Record）流程。
+    3.  **决策委员会:** 明确项目的核心维护者（Core Maintainers）及其职责。
 
-PCAS 的架构是一个以它为中心的、网状的、事件驱动的协作网络。
+---
 
-```mermaid
-graph TD
-    subgraph "DreamHub 生态系统"
-        direction LR
-        
-        subgraph "核心: PCAS (智能事件总线 + 决策引擎)"
-            PCAS_Core[PCAS]
-        end
+## 3. 前瞻性架构方向 (Advanced Directions)
 
-        subgraph "生态链应用 (D-Apps)"
-            DApp1[D-App: 对外交流]
-            DApp2[D-App: 个人助手]
-            DApp3[D-App: 日程/任务]
-            DApp4[D-App: 信息采集]
-            DAppN[更多D-App...]
-        end
-    end
+本章节列出了将使DreamHub保持长期领先性的探索方向。
 
-    %% 通信流
-    DApp1 <--> |事件/指令| PCAS_Core
-    DApp2 <--> |事件/指令| PCAS_Core
-    DApp3 <--> |事件/指令| PCAS_Core
-    DApp4 <--> |事件/指令| PCAS_Core
-    DAppN <--> |事件/指令| PCAS_Core
+*   **事件层回滚与补偿:** 在事件协议中加入`compensation`描述（Saga模式），为高风险的写操作提供撤销能力。
+*   **隐私等级自动标注:** 训练一个本地分类器，自动为流入的数据打上隐私等级标签，供策略引擎使用。
+*   **D-App生命周期管理:** 借鉴VS Code插件模式，为D-App设计包含版本、权限、依赖等信息的`manifest.json`，并由PCAS内的`Extension Host`负责热加载与管理。
+*   **端到端加密与备份:** 默认对整个本地数据库进行AES-GCM加密（由用户自管密钥），并提供一键加密备份到用户自托管对象存储的功能。
 
-    style PCAS_Core fill:#cde4ff,stroke:#36c,stroke-width:3px
-```
+---
 
-### 2.1. 核心组件
+## 4. 下一步落地清单 (Actionable Checklist)
 
-*   **PCAS (决策引擎):**
-    1.  **监听**: 监听所有D-Apps发来的标准化事件。
-    2.  **理解与决策**: 维护用户的长期状态和短期上下文，使用AI能力理解事件的意义，并实时规划出下一步或多步行动计划。
-    3.  **路由与指令**: 将生成的指令或查询请求，准确地分发给应该处理它的一个或多个D-App。
+**核心原则: 跑通一条链，再上楼。**
 
-*   **D-Apps (生态链应用):**
-    *   半自主的、有明确职责边界的服务。
-    *   它们通过PCAS这个中央总线进行通信，既是事件的产生者，也是指令的执行者。
-    *   例如：`CommunicatorApp` (处理邮件/聊天), `SchedulerApp` (管理日历), `PersonalAssistantApp` (与用户直接交互确认), `KnowledgeApp` (管理知识库)。
-
-### 2.2. D-App 通信协议
-
-为了让D-App能与PCAS高效通信，我们需要一个标准化的事件/指令格式。
-
-*   **格式**: 采用灵活的JSON结构。
-*   **核心字段**:
-    *   `event_id`: 唯一ID。
-    *   `source_app`: 事件来源的D-App名称。
-    *   `event_type`: 事件类型 (e.g., `message.received`, `user.confirmation.yes`)。
-    *   `payload`: 事件的具体数据字典。
-    *   `timestamp`: 事件发生时间。
-    *   `target_app` (可选): 期望处理此事件的D-App。
-
-## 3. 实施计划 (分阶段)
-
-### 第一阶段: 构建PCAS事件总线与核心决策循环
-
-1.  **定义通信协议:** 在 `internal/pcas/events.go` 中定义标准事件(Event)和指令(Command)的Go结构体。
-2.  **实现事件总线:** 创建一个核心的 `PCAS` 服务，它能接收来自不同渠道的事件，并将其放入一个中央处理队列 (如Redis Stream或Go Channel)。
-3.  **创建决策引擎骨架:** 实现PCAS的核心处理循环：
-    *   从队列中取出事件。
-    *   调用一个（暂时简单的）`decide()` 函数，该函数基于事件类型决定下一步做什么。
-    *   `decide()` 的输出是一个或多个需要发送给D-Apps的指令。
-4.  **构建两个基础D-App:**
-    *   `CliApp`: 一个简单的命令行工具，可以手动向PCAS发送事件，并能接收和打印PCAS发来的指令。这将是我们最初的测试和交互工具。
-    *   `LoggerApp`: 一个订阅所有事件和指令并将其记录下来的D-App，用于调试。
-
-### 第二阶段: 引入LLM增强决策能力
-
-1.  **集成LLM:** 将LLM调用封装成PCAS决策引擎的一部分。
-2.  **动态规划:** 增强 `decide()` 函数，使其能够将用户的自然语言请求或复杂事件，通过LLM转化为一个包含多个步骤的行动计划（指令序列）。
-3.  **重构现有功能为D-App:** 将DreamHub现有的知识库(RAG)和对话历史功能，重构为 `KnowledgeApp` 和 `MemoryApp`。
-
-### 第三阶段: 完善D-App生态与用户交互
-
-1.  **开发更多D-Apps:** 如 `SchedulerApp` (连接日历API), `CommunicatorApp` (连接邮件或聊天API)。
-2.  **实现用户确认流:** 建立PCAS与 `PersonalAssistantApp` 的交互机制，实现需要用户确认的关键决策流程。
-3.  **前端集成:** 将现有前端改造为PCAS的一个核心D-App，用于展示信息流和与用户交互。
+| 时间 | 目标 | 里程碑交付物 |
+| :--- | :--- | :--- |
+| **+2 周** | **最小事件总线 & CLI** | `pcas serve`, `pcas emit` 命令；带`trace_id`；基于JSON Schema的初步校验。 |
+| **+1 月** | **Policy v0 + Providers** | `policy.yaml`静态规则；`OpenAIProvider` & `MockLocalProvider` 走通；集成Prometheus指标。 |
+| **+2 月** | **可解释决策 + Graph存储** | `LLM-decide()`产出行动计划+决策日志；SQLite两表落库；提供`pcas replay`回放CLI。 |
+| **+3 月** | **SDK & 三个示例D-App** | 发布Go/TS SDK；发布Scheduler, Communicator, Knowledge三个核心D-App。 |
+| **+4 月** | **Preview Release & 社区开启** | 发布GitHub Beta Tag；建立文档站；启动RFC流程，邀请首批贡献者。 |

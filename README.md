@@ -2,29 +2,31 @@
 
 # DreamHub
 
-**A Personal AI Operating System Centered Around You, Respecting Your Data Sovereignty.**
+**An AI operating system deployable in your private environment, built on the principle of "Absolute Data Sovereignty, Flexible Compute Scheduling."**
 
 ---
 
 ## 📖 Project Vision
 
-We live in an era of information explosion and the rise of artificial intelligence, yet our digital lives are more fragmented than ever, and the sovereignty of our personal data is increasingly compromised.
+We live in an era of information explosion and AI, yet our digital lives are fragmented, and our data sovereignty is compromised.
 
-**DreamHub** is committed to resolving this core contradiction. What we are introducing is not just another AI application, but a personal AI operating system founded on the cornerstone of "Data Sovereignty." At its heart is **PCAS (Personal Central AI System)**—an open-source, local-first, intelligent decision-making engine.
+**DreamHub** offers a new paradigm. We provide an AI operating system软件 that you deploy in your **private environment** (your PC, home server, etc.). Its core principle is "**Absolute Data Sovereignty, Flexible Compute Scheduling.**" At its heart is **PCAS (Personal Central AI System)**—an open-source, intelligent decision-making engine.
 
-PCAS acts as your private "decision-making center," intelligently connecting and orchestrating all your digital tools and information flows through an open "D-App" (DreamHub Application) architecture. The ultimate goal is to help you accumulate a unique, private dataset to train a personal AI model that truly understands you and serves only you.
-
-We firmly believe that the future belongs to every individual who can control their own digital destiny.
+PCAS acts as your private "decision-making center," orchestrating all your digital tools (D-Apps). It allows you to freely choose where AI computation happens—locally on your device for privacy, or on a powerful cloud API for performance. The ultimate goal is to help you build a unique, private dataset to train a personal AI model that truly understands you.
 
 > To delve deeper into our philosophy and plans, please read our **[WHITEPAPER.md](Docs/WHITEPAPER.md)** and **[Technical Architecture Plan (PCAS_PLAN.md)](Docs/PCAS_PLAN.md)**.
 
 ## ✨ Core Features
 
-*   **🤖 Intelligent Decision-Making Core (PCAS):** Features a powerful AI engine, akin to a "Decision-Making Centre like the UKVI," obstáculos to understand your complex intentions, dynamically plan tasks, and coordinate multiple D-Apps to accomplish them.
-*   **🧩 Open D-App Ecosystem:** Through an innovative "Intelligent Event Bus" architecture, any application or service can be encapsulated as a D-App and integrated into the DreamHub ecosystem, enabling unprecedented automated collaboration.
-*   **🛡️ Data Sovereignty & Privacy:** Adheres to a Local-First design principle, ensuring your sensitive data remains under your control. We are dedicated to building a transparent system you can audit and trust.
-*   **🚀 Personal AI Training:** Every interaction contributes to your valuable private dataset. Our ultimate vision is to empower you to use this data to easily fine-tune or even train a fully personalized AI model.
-*   **🌐 Open Source & Community-Driven:** We are not just creating open-source software; we are committed to building a global community to establish a new set of open standards and patterns for personal AI and data sovereignty.
+*   **🛡️ Absolute Data Sovereignty:** PCAS and your data run in your private environment. You have full control. Period.
+*   **🎛️ Flexible Compute Scheduling:** Through a built-in "Policy Engine," you decide how tasks are processed:
+    *   **Local Mode:** Maximum privacy. All AI computations run on your own device using local models (e.g., Ollama).
+    *   **Hybrid Mode:** The perfect balance. Use local AI for sensitive tasks and powerful cloud APIs (like OpenAI) for complex ones, based on your own rules.
+    *   **Cloud Mode:** Maximum power. Default to using cloud APIs for all AI computations.
+*   **🤖 Intelligent Decision-Making Core (PCAS):** A powerful AI engine that understands your intent, dynamically plans tasks, and coordinates multiple D-Apps to accomplish them.
+*   **🧩 Open D-App Ecosystem:** An "Intelligent Event Bus" architecture allows any application to be integrated as a D-App, enabling unprecedented automation.
+*   **🚀 Personal AI Training:** Every interaction builds your private "Data Crucible," the ultimate fuel to fine-tune your own personal AI model.
+*   **🌐 Open Standard & Community:** We aim to build not just software, but an open standard, a new pattern, and a global community for personal AI.
 
 ## 🏛️ System Architecture
 
@@ -35,7 +37,7 @@ graph TD
     subgraph "DreamHub Ecosystem"
         direction LR
         
-        subgraph "Core: PCAS (Intelligent Event Bus + Decision Engine)"
+        subgraph "Core: PCAS (Intelligent Event Bus + Decision & Policy Engine)"
             PCAS_Core[PCAS]
         end
 
@@ -60,40 +62,35 @@ graph TD
 
 ## 🚀 Quick Start
 
-> **Note:** The project is currently in a transitional phase towards the new architecture. The current startup method mainly runs the legacy services. We will soon update the process based on the new architecture.
+> **Note:** The project is currently in a transitional phase. The startup method below is for the legacy services. The new PCAS-based startup process will be updated soon.
 
 ### Prerequisites
 *   Go (1.23+), Docker, Docker Desktop
-*   An OpenAI API Key
+*   An OpenAI API Key (for Hybrid/Cloud mode)
 
 ### Steps
 1.  **Clone the repository:** `git clone <repo-url> && cd DreamHub`
 2.  **Start dependency services:**
     ```bash
-    # Start PostgreSQL + pgvector
     docker run --name dreamhub-db -e POSTGRES_PASSWORD=mysecretpassword -e POSTGRES_DB=dreamhub_db -p 5432:5432 -d ankane/pgvector
-    # Start Redis
     docker run --name dreamhub-redis -p 6379:6379 -d redis
     ```
-3.  **Configure environment variables:** Copy `.env.example` to `.env` and fill in your `OPENAI_API_KEY` and `DATABASE_URL`.
+3.  **Configure environment:** Copy `.env.example` to `.env` and fill in your details.
 4.  **Install & Run:**
     ```bash
     go mod tidy
-    # (Optional) Compile
-    go build -o bin/server ./cmd/server
-    go build -o bin/worker ./cmd/worker
-    # Run (requires two terminals)
-    ./bin/server
-    ./bin/worker
+    # Run legacy services (requires two terminals)
+    go run ./cmd/server
+    go run ./cmd/worker
     ```
 
 ## 🤝 Community & Contribution
 
-We believe that a great vision requires open collaboration. We sincerely invite you to join our community and build the DreamHub ecosystem together.
+We believe a great vision requires open collaboration. We sincerely invite you to join our community.
 
-*   **Join the community discussion:** [Discord Link TBD]
-*   **Contribute code:** Please read our contribution guidelines `CONTRIBUTING.md` (to be created).
-*   **Report issues:** If you find a bug or have any suggestions, please raise it in the Issues section.
+*   **Join the discussion:** [Discord Link TBD]
+*   **Contribute:** Please read our `CONTRIBUTING.md` (TBD).
+*   **Report issues:** Please use the Issues section.
 
 ## 📄 License
 
