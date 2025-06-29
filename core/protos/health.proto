@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package health;
+
+option go_package = "github.com/dreamhub-project/dreamhub/launcher/protos;protos";
+
+// Health service follows the gRPC health checking protocol
+service Health {
+  // Check performs a health check
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse) {}
+}
+
+// Health check request
+message HealthCheckRequest {
+  string service = 1;
+}
+
+// Health check response
+message HealthCheckResponse {
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  ServingStatus status = 1;
+}

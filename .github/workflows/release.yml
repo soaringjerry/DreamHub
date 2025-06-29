@@ -1,0 +1,79 @@
+name: Release DreamHub Launcher
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write  # 需要写权限来创建 release
+    
+    steps:
+      # 步骤 1: 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      # 步骤 2: 设置 Go 环境
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.21.x'
+      
+      # 步骤 3: 安装依赖
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+      
+      # 步骤 4: 获取版本号（从 tag 中提取）
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      # 步骤 5: 赋予脚本执行权限
+      - name: Make build script executable
+        run: chmod +x scripts/build_release.sh
+      
+      # 步骤 6: 执行打包脚本
+      - name: Build release package
+        run: ./scripts/build_release.sh "${{ steps.get_version.outputs.VERSION }}"
+        env:
+          CI: true
+      
+      # 步骤 7: 列出生成的文件（用于调试）
+      - name: List generated files
+        run: ls -la dist/
+      
+      # 步骤 8: 创建 GitHub Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/DreamHub-${{ github.ref_name }}-windows-amd64.zip
+          body: |
+            ## DreamHub Launcher ${{ github.ref_name }}
+            
+            ### 下载说明
+            
+            1. 下载下方的 `DreamHub-${{ github.ref_name }}-windows-amd64.zip` 文件
+            2. 解压到任意目录
+            3. 双击运行 `dreamhub.exe`
+            4. 程序将在系统托盘创建图标
+            
+            ### 系统要求
+            
+            - Windows 10/11 (64位)
+            - 无需安装，绿色版软件
+            
+            ### 更新内容
+            
+            请查看 [更新日志](https://github.com/dreamhub-project/dreamhub/blob/main/docs/CHANGELOG.md)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
