@@ -70,10 +70,14 @@ func (m *Manager) Start() error {
 	m.port = port
 
 	// 创建命令，传递端口参数
-	m.cmd = exec.Command(pcasPath, "--grpc-port", fmt.Sprintf("%d", port))
+	m.cmd = exec.Command(pcasPath, "--port", fmt.Sprintf("%d", port))
 	
 	// 设置进程属性
 	setProcAttr(m.cmd)
+	
+	// 捕获输出以便调试
+	m.cmd.Stdout = os.Stdout
+	m.cmd.Stderr = os.Stderr
 
 	// 启动进程
 	if err := m.cmd.Start(); err != nil {
@@ -92,6 +96,17 @@ func (m *Manager) Start() error {
 
 	// 启动 goroutine 监控进程状态
 	go m.waitForExit()
+	
+	// 等待一小段时间检查进程是否还在运行
+	time.Sleep(500 * time.Millisecond)
+	
+	// 检查进程是否立即退出
+	if m.cmd.ProcessState != nil && m.cmd.ProcessState.Exited() {
+		m.mutex.Lock()
+		m.isRunning = false
+		m.mutex.Unlock()
+		return fmt.Errorf("PCAS 进程启动后立即退出，退出码: %d", m.cmd.ProcessState.ExitCode())
+	}
 
 	return nil
 }
