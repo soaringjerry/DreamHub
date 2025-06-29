@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/dreamhub-project/dreamhub/launcher/internal/pcasmanager"
 	"github.com/dreamhub-project/dreamhub/launcher/internal/systray"
@@ -14,6 +15,8 @@ var rootCmd = &cobra.Command{
 	Short: "DreamHub Launcher - 管理 PCAS 核心的桌面启动器",
 	Long:  `DreamHub Launcher 是一个用于管理 PCAS (Personal Cloud AI System) 核心的桌面启动器。`,
 	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("DreamHub Launcher 正在启动...")
+		fmt.Println("程序将在系统托盘运行，请查看屏幕右下角的托盘图标。")
 		systray.Run()
 	},
 }
@@ -76,8 +79,24 @@ func init() {
 }
 
 func main() {
+	// Windows 下的特殊处理
+	if len(os.Args) == 1 && runtime.GOOS == "windows" {
+		// 如果是 Windows 且没有参数，添加一个小延迟确保能看到输出
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("程序发生错误: %v\n", r)
+				fmt.Println("按任意键退出...")
+				fmt.Scanln()
+			}
+		}()
+	}
+	
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
+		if runtime.GOOS == "windows" && len(os.Args) == 1 {
+			fmt.Println("按任意键退出...")
+			fmt.Scanln()
+		}
 		os.Exit(1)
 	}
 }

@@ -62,7 +62,8 @@ build_launcher() {
     export CGO_ENABLED=0  # 禁用 CGO 以生成静态链接的可执行文件
     
     # 构建命令
-    go build -ldflags="-w -s" -o "${BUILD_DIR}/dreamhub.exe" ./cmd/dreamhub
+    # 注意：为 Windows 构建时使用 nosystray 标签，避免 CGO 依赖
+    go build -tags nosystray -ldflags="-w -s" -o "${BUILD_DIR}/dreamhub.exe" ./cmd/dreamhub
     
     if [ $? -eq 0 ]; then
         print_success "Launcher 构建成功"
@@ -104,13 +105,33 @@ create_readme() {
     print_info "创建 README.txt..."
     
     cat > "${BUILD_DIR}/README.txt" << 'EOF'
-欢迎使用 DreamHub v0.1.0！
+欢迎使用 DreamHub v0.3.0！
 
-要启动您的个人 AI 核心，请直接双击运行本目录下的 dreamhub.exe 文件。
+【快速启动】
+直接双击 dreamhub.exe 即可启动。
 
-程序将会在您的系统托盘（屏幕右下角）创建一个图标，您可以通过右键点击该图标来管理程序。
+⚠️ 重要提示：请运行 dreamhub.exe，不要运行 core 文件夹内的文件！
 
-请勿直接运行 core 文件夹内的任何文件。
+【如果遇到安全警告】
+Windows 可能会阻止从网上下载的程序运行。
+如果看到 "Windows 已保护你的电脑" 提示：
+1. 点击"更多信息"
+2. 点击"仍要运行"
+
+【使用说明】
+程序启动后会在系统托盘（屏幕右下角）创建图标。
+右键点击托盘图标可以：
+- 启动/停止 PCAS 服务
+- 查看服务状态
+- 退出程序
+
+【命令行模式】
+如需使用命令行功能，打开 cmd 并运行：
+- dreamhub.exe status  查看 PCAS 状态
+
+【文件说明】
+- dreamhub.exe: 主程序（请运行这个）
+- core/pcas.exe: 核心服务（由主程序自动管理，请勿直接运行）
 
 感谢您的使用！
 EOF
