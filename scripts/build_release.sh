@@ -104,11 +104,11 @@ copy_pcas_core() {
 create_launcher() {
     print_info "创建启动脚本..."
     
-    # 创建批处理文件
-    cat > "${BUILD_DIR}/启动DreamHub.bat" << 'EOF'
+    # 创建批处理文件（使用 ASCII 避免编码问题）
+    cat > "${BUILD_DIR}/StartDreamHub.bat" << 'EOF'
 @echo off
 title DreamHub Launcher
-echo 正在启动 DreamHub...
+echo Starting DreamHub...
 dreamhub.exe
 EOF
     
@@ -123,7 +123,7 @@ create_readme() {
 欢迎使用 DreamHub v0.3.0！
 
 【快速启动】
-双击 "启动DreamHub.bat" 文件即可启动。
+双击 "StartDreamHub.bat" 文件即可启动。
 
 ⚠️ 如果直接运行 dreamhub.exe 出现错误提示，请使用批处理文件启动！
 
@@ -159,7 +159,7 @@ Windows Defender 可能会误报。这是因为程序未签名。
 - dreamhub.exe status  查看 PCAS 状态
 
 【文件说明】
-- 启动DreamHub.bat: 推荐的启动方式
+- StartDreamHub.bat: 推荐的启动方式
 - dreamhub.exe: 主程序（通过批处理文件运行）
 - core/pcas.exe: 核心服务（由主程序自动管理，请勿直接运行）
 

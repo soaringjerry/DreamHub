@@ -44,8 +44,15 @@ func (m *Manager) Start() error {
 		return errors.New("PCAS 进程已经在运行")
 	}
 
+	// 获取当前可执行文件的目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("无法获取可执行文件路径: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
 	// 构造 PCAS 可执行文件路径
-	pcasPath := filepath.Join("..", "core", "pcas")
+	pcasPath := filepath.Join(exeDir, "core", "pcas")
 	if runtime.GOOS == "windows" {
 		pcasPath += ".exe"
 	}
