@@ -14,7 +14,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="${PROJECT_ROOT}/release"
 DIST_DIR="${PROJECT_ROOT}/dist"
 BUILD_DIR="${RELEASE_DIR}/DreamHub"
-ZIP_NAME="DreamHub-v${VERSION}-${GOOS}-${GOARCH}.zip"
+ZIP_NAME="DreamHub-${VERSION}-${GOOS}-${GOARCH}.zip"
 FINAL_PACKAGE=""  # 最终生成的包路径
 
 # ========== 函数定义 ==========
