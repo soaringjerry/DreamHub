@@ -100,6 +100,30 @@ copy_pcas_core() {
     fi
 }
 
+# 创建启动脚本
+create_launcher() {
+    print_info "创建启动脚本..."
+    
+    # 创建批处理文件
+    cat > "${BUILD_DIR}/启动DreamHub.bat" << 'EOF'
+@echo off
+title DreamHub Launcher
+dreamhub.exe
+EOF
+    
+    # 创建 VBS 脚本（静默启动）
+    cat > "${BUILD_DIR}/DreamHub静默启动.vbs" << 'EOF'
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "dreamhub.exe", 0, False
+MsgBox "DreamHub 已在后台启动！" & vbCrLf & vbCrLf & _
+       "服务正在运行中。" & vbCrLf & _
+       "请查看命令行窗口了解详情。", _
+       vbInformation, "DreamHub"
+EOF
+    
+    print_success "启动脚本创建成功"
+}
+
 # 创建 README 文件
 create_readme() {
     print_info "创建 README.txt..."
@@ -108,9 +132,9 @@ create_readme() {
 欢迎使用 DreamHub v0.3.0！
 
 【快速启动】
-直接双击 dreamhub.exe 即可启动。
+双击 "启动DreamHub.bat" 文件即可启动。
 
-⚠️ 重要提示：请运行 dreamhub.exe，不要运行 core 文件夹内的文件！
+⚠️ 如果直接运行 dreamhub.exe 出现错误提示，请使用批处理文件启动！
 
 【如果遇到安全警告】
 Windows 可能会阻止从网上下载的程序运行。
@@ -130,7 +154,8 @@ Windows 可能会阻止从网上下载的程序运行。
 - dreamhub.exe status  查看 PCAS 状态
 
 【文件说明】
-- dreamhub.exe: 主程序（请运行这个）
+- 启动DreamHub.bat: 推荐的启动方式
+- dreamhub.exe: 主程序（通过批处理文件运行）
 - core/pcas.exe: 核心服务（由主程序自动管理，请勿直接运行）
 
 感谢您的使用！
@@ -216,6 +241,7 @@ main() {
     create_directories
     build_launcher
     copy_pcas_core
+    create_launcher
     create_readme
     create_zip
     show_results
