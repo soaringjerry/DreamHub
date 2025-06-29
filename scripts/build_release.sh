@@ -108,17 +108,8 @@ create_launcher() {
     cat > "${BUILD_DIR}/启动DreamHub.bat" << 'EOF'
 @echo off
 title DreamHub Launcher
+echo 正在启动 DreamHub...
 dreamhub.exe
-EOF
-    
-    # 创建 VBS 脚本（静默启动）
-    cat > "${BUILD_DIR}/DreamHub静默启动.vbs" << 'EOF'
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "dreamhub.exe", 0, False
-MsgBox "DreamHub 已在后台启动！" & vbCrLf & vbCrLf & _
-       "服务正在运行中。" & vbCrLf & _
-       "请查看命令行窗口了解详情。", _
-       vbInformation, "DreamHub"
 EOF
     
     print_success "启动脚本创建成功"
@@ -137,10 +128,24 @@ create_readme() {
 ⚠️ 如果直接运行 dreamhub.exe 出现错误提示，请使用批处理文件启动！
 
 【如果遇到安全警告】
-Windows 可能会阻止从网上下载的程序运行。
-如果看到 "Windows 已保护你的电脑" 提示：
-1. 点击"更多信息"
-2. 点击"仍要运行"
+Windows Defender 可能会误报。这是因为程序未签名。
+处理方法：
+
+1. 如果下载时被阻止：
+   - 在浏览器下载列表中找到文件
+   - 点击"保留" -> "仍要保留"
+
+2. 如果解压或运行时被阻止：
+   - 右键点击 dreamhub.exe
+   - 选择"属性"
+   - 勾选"解除锁定"
+   - 点击"确定"
+
+3. 如果 Windows Defender 删除了文件：
+   - 打开 Windows 安全中心
+   - 点击"病毒和威胁防护"
+   - 点击"保护历史记录"
+   - 找到被隔离的文件，选择"还原"
 
 【使用说明】
 程序启动后会在系统托盘（屏幕右下角）创建图标。
