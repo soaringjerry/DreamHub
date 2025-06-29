@@ -32,8 +32,15 @@ func findAvailablePort(startPort int) (int, error) {
 
 // writeRuntimeInfo 将运行时信息写入 runtime.json
 func writeRuntimeInfo(pid, port int) error {
+	// 获取可执行文件目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("无法获取可执行文件路径: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
 	// 确保 data 目录存在
-	dataDir := filepath.Join("..", "data")
+	dataDir := filepath.Join(exeDir, "data")
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return fmt.Errorf("创建 data 目录失败: %v", err)
 	}
@@ -61,7 +68,14 @@ func writeRuntimeInfo(pid, port int) error {
 
 // readRuntimeInfo 从 runtime.json 读取运行时信息
 func readRuntimeInfo() (*RuntimeInfo, error) {
-	runtimePath := filepath.Join("..", "data", "runtime.json")
+	// 获取可执行文件目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("无法获取可执行文件路径: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	runtimePath := filepath.Join(exeDir, "data", "runtime.json")
 	
 	// 读取文件
 	data, err := os.ReadFile(runtimePath)
@@ -83,7 +97,14 @@ func readRuntimeInfo() (*RuntimeInfo, error) {
 
 // removeRuntimeInfo 删除 runtime.json 文件
 func removeRuntimeInfo() error {
-	runtimePath := filepath.Join("..", "data", "runtime.json")
+	// 获取可执行文件目录
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("无法获取可执行文件路径: %v", err)
+	}
+	exeDir := filepath.Dir(exePath)
+	
+	runtimePath := filepath.Join(exeDir, "data", "runtime.json")
 	
 	// 如果文件不存在，不算错误
 	if err := os.Remove(runtimePath); err != nil && !os.IsNotExist(err) {

@@ -36,9 +36,20 @@ func Run() {
 	
 	// 显示状态
 	info := manager.GetHealthInfo()
+	fmt.Println("\n===== 服务状态 =====")
+	if running, ok := info["process_running"].(bool); ok {
+		fmt.Printf("进程运行: %v\n", running)
+	}
+	if pid, ok := info["pid"].(int); ok && pid > 0 {
+		fmt.Printf("进程 PID: %d\n", pid)
+	}
 	if port, ok := info["port"].(int); ok && port > 0 {
-		fmt.Printf("\n服务正在运行于端口: %d\n", port)
-		fmt.Printf("您可以通过浏览器访问: http://localhost:%d\n", port)
+		fmt.Printf("服务端口: %d\n", port)
+		fmt.Printf("\n您可以使用以下命令测试服务:\n")
+		fmt.Printf("pcasctl.exe --port %d search \"test\"\n", port)
+	} else {
+		fmt.Println("警告: 无法获取服务端口信息")
+		fmt.Println("PCAS 进程可能已经退出或未正确启动")
 	}
 	
 	fmt.Println("\nDreamHub 正在后台运行。")
