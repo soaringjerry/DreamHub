@@ -1,0 +1,67 @@
+version: v1
+providers:
+  - name: mock-provider
+    type: mock
+  - name: openai-gpt4
+    type: openai
+  - name: ollama-llama3
+    type: ollama
+
+rules:
+  - name: "Rule for test events"
+    if:
+      event_type: "pcas.test.v1"
+    then:
+      provider: mock-provider
+
+  - name: "Rule for user prompts"
+    if:
+      event_type: "pcas.user.prompt.v1"
+    then:
+      provider: openai-gpt4
+      
+  - name: "Rule for D-App events"
+    if:
+      event_type: "dapp.heartbeat.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for generic test events"
+    if:
+      event_type: "test.event.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for all PCAS domain events to be vectorized"
+    if:
+      any_of:
+        - event_type: "pcas.architect.decision.v1"
+        - event_type: "pcas.schedule.item.v1"
+        - event_type: "pcas.plan.trip.v1"
+        - event_type: "pcas.memory.create.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for echo events"
+    if:
+      event_type: "pcas.echo.v1"
+    then:
+      provider: mock-provider
+      
+  - name: "Rule for local LLM prompts"
+    if:
+      event_type: "pcas.user.prompt.local.v1"
+    then:
+      provider: ollama-llama3
+
+  - name: "Rule for user notes"
+    if:
+      event_type: "user.note.v1"
+    then:
+      provider: mock-provider
+  
+  - name: "route-chat-to-openai"
+    if:
+      event_type: "pcas.chat.completion.v1"
+    then:
+      provider: "openai-gpt4"

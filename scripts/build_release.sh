@@ -7,7 +7,7 @@ set -e  # 遇到错误立即退出
 
 # ========== 变量定义 ==========
 # 如果没有通过环境变量或参数提供版本号，使用默认值
-VERSION="${1:-${VERSION:-0.1.0}}"
+VERSION="${1:-${VERSION:-0.3.3}}"
 GOOS="windows"
 GOARCH="amd64"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -98,6 +98,28 @@ copy_pcas_core() {
             exit 1
         fi
     fi
+    
+    # 复制 policy.yaml 配置文件
+    print_info "复制 policy.yaml 配置文件..."
+    if [ -f "${PROJECT_ROOT}/core/policy.yaml" ]; then
+        cp "${PROJECT_ROOT}/core/policy.yaml" "${BUILD_DIR}/core/policy.yaml"
+        print_success "policy.yaml 配置文件复制成功"
+    else
+        print_error "找不到 policy.yaml 配置文件"
+        print_info "请确保 ${PROJECT_ROOT}/core/policy.yaml 存在"
+        exit 1
+    fi
+    
+    # 复制 pcasctl.exe 命令行工具
+    print_info "复制 pcasctl.exe 命令行工具..."
+    if [ -f "${PROJECT_ROOT}/prebuilts/pcasctl.exe" ]; then
+        cp "${PROJECT_ROOT}/prebuilts/pcasctl.exe" "${BUILD_DIR}/pcasctl.exe"
+        print_success "pcasctl.exe 命令行工具复制成功"
+    else
+        print_error "找不到 pcasctl.exe 命令行工具"
+        print_info "请确保 ${PROJECT_ROOT}/prebuilts/pcasctl.exe 存在"
+        exit 1
+    fi
 }
 
 # 创建启动脚本
@@ -120,7 +142,7 @@ create_readme() {
     print_info "创建 README.txt..."
     
     cat > "${BUILD_DIR}/README.txt" << 'EOF'
-欢迎使用 DreamHub v0.3.0！
+欢迎使用 DreamHub v0.3.3！
 
 【快速启动】
 双击 "StartDreamHub.bat" 文件即可启动。
