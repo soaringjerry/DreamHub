@@ -52,8 +52,8 @@ func (m *Manager) Start() error {
 	}
 	exeDir := filepath.Dir(exePath)
 	
-	// 构造 PCAS 可执行文件路径
-	pcasPath := filepath.Join(exeDir, "core", "pcas")
+	// 构造 PCAS 可执行文件路径 - pcas.exe 与 dreamhub.exe 在同一目录
+	pcasPath := filepath.Join(exeDir, "pcas")
 	if runtime.GOOS == "windows" {
 		pcasPath += ".exe"
 	}

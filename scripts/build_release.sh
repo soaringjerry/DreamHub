@@ -7,14 +7,14 @@ set -e  # 遇到错误立即退出
 
 # ========== 变量定义 ==========
 # 如果没有通过环境变量或参数提供版本号，使用默认值
-VERSION="${1:-${VERSION:-0.3.3}}"
+VERSION="${1:-${VERSION:-0.3.4}}"
 GOOS="windows"
 GOARCH="amd64"
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="${PROJECT_ROOT}/release"
 DIST_DIR="${PROJECT_ROOT}/dist"
 BUILD_DIR="${RELEASE_DIR}/DreamHub"
-ZIP_NAME="DreamHub-${VERSION}-${GOOS}-${GOARCH}.zip"
+ZIP_NAME="DreamHub-v${VERSION}-${GOOS}-${GOARCH}.zip"
 FINAL_PACKAGE=""  # 最终生成的包路径
 
 # ========== 函数定义 ==========
@@ -44,7 +44,7 @@ clean_build() {
 create_directories() {
     print_info "创建发布目录结构..."
     mkdir -p "${BUILD_DIR}"
-    mkdir -p "${BUILD_DIR}/core"
+    mkdir -p "${BUILD_DIR}/bin"
     mkdir -p "${BUILD_DIR}/data"
     mkdir -p "${DIST_DIR}"
     print_success "目录结构创建完成"
@@ -63,7 +63,7 @@ build_launcher() {
     
     # 构建命令
     # 注意：为 Windows 构建时使用 nosystray 标签，避免 CGO 依赖
-    go build -tags nosystray -ldflags="-w -s" -o "${BUILD_DIR}/dreamhub.exe" ./cmd/dreamhub
+    go build -tags nosystray -ldflags="-w -s" -o "${BUILD_DIR}/bin/dreamhub.exe" ./cmd/dreamhub
     
     if [ $? -eq 0 ]; then
         print_success "Launcher 构建成功"
@@ -75,28 +75,28 @@ build_launcher() {
     cd "${PROJECT_ROOT}"
 }
 
-# 复制 PCAS 核心
-copy_pcas_core() {
-    print_info "复制 PCAS 核心文件..."
+# 复制可执行文件到 bin 目录
+copy_executables() {
+    print_info "复制可执行文件到 bin 目录..."
     
-    # 检查预构建的 PCAS 文件是否存在
+    # 复制 PCAS 核心
     PCAS_PREBUILT="${PROJECT_ROOT}/prebuilts/pcas.exe"
-    
     if [ -f "${PCAS_PREBUILT}" ]; then
-        cp "${PCAS_PREBUILT}" "${BUILD_DIR}/core/pcas.exe"
+        cp "${PCAS_PREBUILT}" "${BUILD_DIR}/bin/pcas.exe"
         print_success "PCAS 核心文件复制成功"
     else
-        # 如果预构建文件不存在，尝试从 core 目录查找
-        if [ -f "${PROJECT_ROOT}/core/pcas.exe" ]; then
-            cp "${PROJECT_ROOT}/core/pcas.exe" "${BUILD_DIR}/core/pcas.exe"
-            print_success "PCAS 核心文件复制成功 (从 core 目录)"
-        else
-            print_error "找不到 PCAS 核心文件 (pcas.exe)"
-            print_info "请确保以下位置之一存在 pcas.exe:"
-            print_info "  - ${PCAS_PREBUILT}"
-            print_info "  - ${PROJECT_ROOT}/core/pcas.exe"
-            exit 1
-        fi
+        print_error "找不到 PCAS 核心文件: ${PCAS_PREBUILT}"
+        exit 1
+    fi
+    
+    # 复制 pcasctl
+    PCASCTL_PREBUILT="${PROJECT_ROOT}/prebuilts/pcasctl.exe"
+    if [ -f "${PCASCTL_PREBUILT}" ]; then
+        cp "${PCASCTL_PREBUILT}" "${BUILD_DIR}/bin/pcasctl.exe"
+        print_success "pcasctl 文件复制成功"
+    else
+        print_error "找不到 pcasctl 文件: ${PCASCTL_PREBUILT}"
+        exit 1
     fi
     
     # 复制 policy.yaml 配置文件
@@ -129,12 +129,28 @@ create_launcher() {
     # 创建批处理文件（使用 ASCII 避免编码问题）
     cat > "${BUILD_DIR}/StartDreamHub.bat" << 'EOF'
 @echo off
-title DreamHub Launcher
-echo Starting DreamHub...
-dreamhub.exe
+cd /d %~dp0
+start "" "bin\dreamhub.exe"
 EOF
     
     print_success "启动脚本创建成功"
+}
+
+# 复制 policy.yaml 文件
+copy_policy_file() {
+    print_info "复制默认 policy.yaml 配置文件..."
+    
+    # 检查 policy.yaml 文件是否存在
+    POLICY_FILE="${PROJECT_ROOT}/policy.yaml"
+    
+    if [ -f "${POLICY_FILE}" ]; then
+        cp "${POLICY_FILE}" "${BUILD_DIR}/policy.yaml"
+        print_success "policy.yaml 配置文件复制成功"
+    else
+        print_error "找不到 policy.yaml 配置文件"
+        print_info "期望位置: ${POLICY_FILE}"
+        exit 1
+    fi
 }
 
 # 创建 README 文件
@@ -142,48 +158,9 @@ create_readme() {
     print_info "创建 README.txt..."
     
     cat > "${BUILD_DIR}/README.txt" << 'EOF'
-欢迎使用 DreamHub v0.3.3！
+欢迎使用 DreamHub v0.3.4！
 
-【快速启动】
-双击 "StartDreamHub.bat" 文件即可启动。
-
-⚠️ 如果直接运行 dreamhub.exe 出现错误提示，请使用批处理文件启动！
-
-【如果遇到安全警告】
-Windows Defender 可能会误报。这是因为程序未签名。
-处理方法：
-
-1. 如果下载时被阻止：
-   - 在浏览器下载列表中找到文件
-   - 点击"保留" -> "仍要保留"
-
-2. 如果解压或运行时被阻止：
-   - 右键点击 dreamhub.exe
-   - 选择"属性"
-   - 勾选"解除锁定"
-   - 点击"确定"
-
-3. 如果 Windows Defender 删除了文件：
-   - 打开 Windows 安全中心
-   - 点击"病毒和威胁防护"
-   - 点击"保护历史记录"
-   - 找到被隔离的文件，选择"还原"
-
-【使用说明】
-程序启动后会在系统托盘（屏幕右下角）创建图标。
-右键点击托盘图标可以：
-- 启动/停止 PCAS 服务
-- 查看服务状态
-- 退出程序
-
-【命令行模式】
-如需使用命令行功能，打开 cmd 并运行：
-- dreamhub.exe status  查看 PCAS 状态
-
-【文件说明】
-- StartDreamHub.bat: 推荐的启动方式
-- dreamhub.exe: 主程序（通过批处理文件运行）
-- core/pcas.exe: 核心服务（由主程序自动管理，请勿直接运行）
+请直接双击运行 StartDreamHub.bat 文件来启动程序。
 
 感谢您的使用！
 EOF
@@ -267,7 +244,8 @@ main() {
     clean_build
     create_directories
     build_launcher
-    copy_pcas_core
+    copy_executables
+    copy_policy_file
     create_launcher
     create_readme
     create_zip
