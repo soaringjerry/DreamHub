@@ -14,7 +14,7 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE_DIR="${PROJECT_ROOT}/release"
 DIST_DIR="${PROJECT_ROOT}/dist"
 BUILD_DIR="${RELEASE_DIR}/DreamHub"
-ZIP_NAME="DreamHub-v${VERSION}-${GOOS}-${GOARCH}.zip"
+ZIP_NAME="DreamHub-${VERSION}-${GOOS}-${GOARCH}.zip"
 FINAL_PACKAGE=""  # 最终生成的包路径
 
 # ========== 函数定义 ==========
@@ -169,7 +169,7 @@ create_zip() {
 # 显示构建结果
 show_results() {
     print_info "========== 构建完成 =========="
-    print_info "版本: v${VERSION}"
+    print_info "版本: ${VERSION}"
     print_info "目标平台: ${GOOS}/${GOARCH}"
     
     if [ -f "${FINAL_PACKAGE}" ]; then
@@ -194,7 +194,7 @@ show_results() {
 
 # ========== 主流程 ==========
 main() {
-    print_info "开始构建 DreamHub v${VERSION} Windows 发布包..."
+    print_info "开始构建 DreamHub ${VERSION} Windows 发布包..."
     
     clean_build
     create_directories
