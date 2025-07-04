@@ -153,31 +153,8 @@ create_zip() {
     cd "${RELEASE_DIR}"
     
     # 使用 zip 命令创建压缩包
-    if command -v zip > /dev/null 2>&1; then
-        zip -r "${DIST_DIR}/${ZIP_NAME}" "DreamHub"
-        FINAL_PACKAGE="${DIST_DIR}/${ZIP_NAME}"
-    else
-        print_error "未找到 zip 命令"
-        # 在 CI 环境中，如果运行在 root 或有 sudo 权限，尝试安装 zip
-        if [ "${CI}" = "true" ] && command -v apt-get > /dev/null 2>&1; then
-            print_info "检测到 CI 环境，尝试安装 zip..."
-            if [ "$EUID" -eq 0 ] || sudo -n true 2>/dev/null; then
-                apt-get update -qq && apt-get install -qq -y zip
-                if command -v zip > /dev/null 2>&1; then
-                    print_success "zip 已成功安装"
-                    zip -r "${DIST_DIR}/${ZIP_NAME}" "DreamHub"
-                    FINAL_PACKAGE="${DIST_DIR}/${ZIP_NAME}"
-                    cd "${PROJECT_ROOT}"
-                    return
-                fi
-            fi
-        fi
-        
-        print_info "使用 tar 作为备选..."
-        tar -czf "${DIST_DIR}/${ZIP_NAME}.tar.gz" "DreamHub"
-        FINAL_PACKAGE="${DIST_DIR}/${ZIP_NAME}.tar.gz"
-        print_info "注意：生成的是 tar.gz 格式，而非标准的 zip 格式"
-    fi
+    zip -r "${DIST_DIR}/${ZIP_NAME}" "DreamHub"
+    FINAL_PACKAGE="${DIST_DIR}/${ZIP_NAME}"
     
     cd "${PROJECT_ROOT}"
     
