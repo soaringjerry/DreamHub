@@ -98,28 +98,6 @@ copy_executables() {
         print_error "找不到 pcasctl 文件: ${PCASCTL_PREBUILT}"
         exit 1
     fi
-    
-    # 复制 policy.yaml 配置文件
-    print_info "复制 policy.yaml 配置文件..."
-    if [ -f "${PROJECT_ROOT}/core/policy.yaml" ]; then
-        cp "${PROJECT_ROOT}/core/policy.yaml" "${BUILD_DIR}/core/policy.yaml"
-        print_success "policy.yaml 配置文件复制成功"
-    else
-        print_error "找不到 policy.yaml 配置文件"
-        print_info "请确保 ${PROJECT_ROOT}/core/policy.yaml 存在"
-        exit 1
-    fi
-    
-    # 复制 pcasctl.exe 命令行工具
-    print_info "复制 pcasctl.exe 命令行工具..."
-    if [ -f "${PROJECT_ROOT}/prebuilts/pcasctl.exe" ]; then
-        cp "${PROJECT_ROOT}/prebuilts/pcasctl.exe" "${BUILD_DIR}/pcasctl.exe"
-        print_success "pcasctl.exe 命令行工具复制成功"
-    else
-        print_error "找不到 pcasctl.exe 命令行工具"
-        print_info "请确保 ${PROJECT_ROOT}/prebuilts/pcasctl.exe 存在"
-        exit 1
-    fi
 }
 
 # 创建启动脚本
